@@ -397,11 +397,6 @@ static gboolean
 window_open_url (DhWindow *window, const gchar *url)
 {
 	DhWindowPriv *priv;
-	BookNode     *node;
-	GnomeVFSURI  *uri;
-	Document     *doc;
-	gchar        *anchor;
-	gchar        *str_uri;
 	
 	g_return_val_if_fail (DH_IS_WINDOW (window), FALSE);
 	g_return_val_if_fail (url != NULL, FALSE);

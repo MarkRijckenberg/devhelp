@@ -358,7 +358,6 @@ html_url_requested_cb (HtmlDocument *doc,
 {
         DhHtml     *html;
         DhHtmlPriv *priv;
-	GnomeVFSURI  *vfs_uri;
 
         d(puts(__FUNCTION__));
 
