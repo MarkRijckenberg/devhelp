@@ -7,5 +7,3 @@ libegg/toolbar/eggtoolbar.c
 libegg/toolbar/eggtoolbutton.c
 libegg/toolbar/eggtoolitem.c
 src/test-profile.c
-
-
