@@ -182,6 +182,9 @@ search_selection_changed_cb (GtkTreeSelection *selection, DhSearch *search)
 				    DH_KEYWORD_MODEL_COL_LINK, &link,
 				    -1);
 
+ 		d(g_print ("Emiting signal with link to: %s (%s)\n",
+			   link->name, link->uri));
+		
 		g_signal_emit (search, signals[LINK_SELECTED], 0, link);
 	}
 }
@@ -383,4 +386,21 @@ dh_search_new (GList *keywords)
 	return GTK_WIDGET (search);
 }
 
+void
+dh_search_set_search_string (DhSearch *search, const gchar *str)
+{
+	DhSearchPriv *priv;
+	gint          str_len;
+	
+	g_return_if_fail (DH_IS_SEARCH (search));
+
+	priv = search->priv;
+
+	str_len = strlen (str);
+
+	gtk_entry_set_text (GTK_ENTRY (priv->entry), str);
+	
+	gtk_editable_set_position (GTK_EDITABLE (priv->entry), str_len);
+	gtk_editable_select_region (GTK_EDITABLE (priv->entry), str_len, -1);
+}
 

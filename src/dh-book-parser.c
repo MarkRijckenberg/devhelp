@@ -291,12 +291,8 @@ book_parser_get_base_uri (const gchar *spec_path,
 	}
 	*ch = '\0';
 
-	g_print ("TMP:URL %s\n", tmp_url);
-	
 	ret_val = g_build_filename (tmp_url, "books", name, NULL);
 	g_free (tmp_url);
-	
-	g_print ("RET_VAL: %s\n", ret_val);
 	
 	if (!ret_val || !g_file_test (ret_val, 
 				      G_FILE_TEST_EXISTS | G_FILE_TEST_IS_DIR)) {

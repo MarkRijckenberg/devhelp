@@ -513,7 +513,5 @@ dh_window_search (DhWindow *window, const gchar *str)
 	
 	priv = window->priv;
 
-#if 0	
 	dh_search_set_search_string (priv->search, str);
-#endif
 }
