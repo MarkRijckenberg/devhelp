@@ -29,21 +29,8 @@
 #include <string.h>
 #include <glib.h>
 #include <gtkhtml/gtkhtml.h>
-#include <libgnome/gnome-defs.h>
 #include <libgnome/gnome-i18n.h>
 #include <libgnomevfs/gnome-vfs.h>
-#include <libgnome/gnome-defs.h>
-#include <libgnome/gnome-i18n.h>
-#include <libgnome/gnome-paper.h>
-#include <libgnomeui/gnome-dialog.h>
-#include <libgnomeui/gnome-stock.h>
-#include <libgnomeui/gnome-uidefs.h>
-#include <libgnomeui/gnome-paper-selector.h>
-#include <libgnomeprint/gnome-printer.h>
-#include <libgnomeprint/gnome-print.h>
-#include <libgnomeprint/gnome-printer-dialog.h>
-#include <libgnomeprint/gnome-print-master.h>
-#include <libgnomeprint/gnome-print-master-preview.h>
 #include "util.h"
 #include "html-widget.h"
 
@@ -204,7 +191,7 @@ html_widget_new (void)
 	html_widget = gtk_type_new (HTML_WIDGET_TYPE);
 	gtk_html_construct (GTK_WIDGET (html_widget));
 
-	str = g_strdup_printf ("<html><head></head><body><h1>DevHelp</h1><p>%s</p></body></html>",
+	str = g_strdup_printf ("<html><head><meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"></head><body><h1>DevHelp</h1><p>%s</p></body></html>",
 			       _("Select a subject in the contents to the left "
 				 "or switch to the search pane to find what you are looking for."
 				 "<p>Use <b>Shift Up/Down</b> to navigate the tree to the left, and "
@@ -414,10 +401,11 @@ html_widget_load_uri (HtmlWidget          *html_widget,
 		priv->page_load_data = read_data;
 	}
 	
-	gnome_vfs_async_open_uri (&read_data->vfs_handle, 
+	gnome_vfs_async_open_uri (&read_data->vfs_handle,
 				  (GnomeVFSURI *) uri,
 				  GNOME_VFS_OPEN_READ,
-				  (GnomeVFSAsyncOpenCallback)html_widget_async_open_cb, 
+				  GNOME_VFS_PRIORITY_DEFAULT,
+				  (GnomeVFSAsyncOpenCallback) html_widget_async_open_cb,
 				  read_data);
 }
 
@@ -447,6 +435,7 @@ html_widget_url_requested (GtkHTML         *gtk_html,
 	gnome_vfs_uri_unref (uri);
 }
 
+#if 0
 void
 html_widget_print (HtmlWidget *html_widget)
 {
@@ -525,3 +514,4 @@ html_widget_print (HtmlWidget *html_widget)
 	gtk_object_unref (GTK_OBJECT (print_master));
 	gtk_widget_destroy (dialog);
 }
+#endif

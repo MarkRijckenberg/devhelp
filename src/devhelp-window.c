@@ -32,9 +32,9 @@
 #include <bonobo.h>
 #include <libgnome/gnome-i18n.h>
 #include <libgnomeui/gnome-about.h>
-#include "devhelp-view.h"
 #include "GNOME_DevHelp.h"
 #include "preferences.h"
+#include "html-widget.h"
 #include "devhelp-window.h"
 
 #define DEVHELP_WINDOW_UI "GNOME_MrProject_Client.ui"
@@ -238,7 +238,7 @@ dw_populate (DevHelpWindow *window)
         
         priv->notebook    = gtk_notebook_new ();
         priv->search_box  = gtk_vbox_new (FALSE, 0);
-	priv->html_widget = devhelp_view_new ();
+	priv->html_widget = html_widget_new ();
         priv->hpaned      = gtk_hpaned_new ();
 	priv->statusbar   = gtk_statusbar_new ();
 	html_sw           = gtk_scrolled_window_new (NULL, NULL);
@@ -348,7 +348,7 @@ dw_populate (DevHelpWindow *window)
 
 	bonobo_window_set_contents (BONOBO_WINDOW (window), priv->hpaned);
 
- 	g_signal_connect_object (G_OBJECT (HTML_VIEW (priv->html_widget)->document),
+ 	g_signal_connect_object (G_OBJECT (priv->html_widget),
 				 "link_clicked", 
 				 G_CALLBACK (dw_link_clicked_cb),
 				 G_OBJECT (window),
@@ -381,7 +381,7 @@ cmd_print_cb (BonoboUIComponent   *component,
 	g_message ("%s: FIXME!", __FUNCTION__);
 #if 0	
 	if (priv->html_widget) {
-		html_widget_print (DEVHELP_VIEW (priv->html_widget));
+		html_widget_print (HTML_WIDGET (priv->html_widget));
 	}
 #endif	
 }
@@ -499,20 +499,20 @@ dw_uri_changed_cb (BonoboListener      *listener,
 {
 	DevHelpWindow       *window;
 	DevHelpWindowPriv   *priv;
-	gchar               *uri;
+	GnomeVFSURI         *uri;
 	
 	g_return_if_fail (user_data != NULL);
 	g_return_if_fail (IS_DEVHELP_WINDOW (user_data));
 	
 	window = DEVHELP_WINDOW (user_data);
 	priv   = window->priv;
-	uri  = g_strdup (any->_value);
+	uri  = gnome_vfs_uri_new (any->_value);
 
 	if (uri) {
-		devhelp_view_open_uri (DEVHELP_VIEW (priv->html_widget), uri, NULL);
+		html_widget_open_uri (HTML_WIDGET (priv->html_widget), uri);
 	}
 	
-	g_free (uri);
+	gnome_vfs_uri_unref (uri);
 }
 
 static void

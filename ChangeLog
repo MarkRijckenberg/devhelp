@@ -1,3 +1,7 @@
+2002-04-28  Mikael Hallendal  <micke@codefactory.se>
+
+	* testing out using the gnome2-port of gtkhtml1.
+
 2002-04-27  Mikael Hallendal  <micke@codefactory.se>
 
 	* src/install.c (install_create_directories): added memleak-fix

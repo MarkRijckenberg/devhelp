@@ -17,8 +17,8 @@ devhelp_2_SOURCES = 				\
 	$(gnome_devhelp_idl_sources)		\
 	bookmark-manager.c			\
 	bookmark-manager.h			\
-	devhelp-view.c				\
-	devhelp-view.h				\
+	html-widget.c				\
+	html-widget.h				\
 	devhelp-window.c			\
 	devhelp-window.h			\
 	help-browser.c				\
