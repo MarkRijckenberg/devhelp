@@ -57,7 +57,7 @@ struct _DhWindowClass
 
 };
 
-GtkType          dh_window_get_type        (void);
+GType            dh_window_get_type        (void);
 GtkWidget *      dh_window_new             (DhProfile   *profile);
 
 void             dh_window_search          (DhWindow    *window,

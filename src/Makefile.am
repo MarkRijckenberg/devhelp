@@ -56,7 +56,8 @@ libdevhelp2_la_SOURCES =			\
 	dh-util.h
 
 libdevhelp2_la_LIBADD =				\
-	@LIBDEVHELP_LIBS@
+	@LIBDEVHELP_LIBS@			\
+	$(top_builddir)/libegg/menu/libegg-menu.la
 
 libdevhelp2_la_LDFLAGS = -avoid-version -module
 

@@ -32,7 +32,7 @@
 #include <gtk/gtkvbox.h>
 #include <libgnome/gnome-i18n.h>
 #include <libgnomeui/gnome-about.h>
-#include <libegg/menu/egg-menu.h>
+#include <libegg/menu/egg-menu-merge.h>
 
 #include "dh-book-tree.h"
 #include "dh-history.h"
@@ -41,26 +41,27 @@
 
 
 struct _DhWindowPriv {
-	DhHistory *history;
-	DhProfile *profile;
+	DhHistory      *history;
+	DhProfile      *profile;
 
-	GtkWidget *menu;
-	GtkWidget *toolbar;
-	GtkWidget *statusbar;
+	GtkWidget      *main_box;
+	GtkWidget      *menu_box;
+	GtkWidget      *hpaned;
+        GtkWidget      *notebook;
+        GtkWidget      *book_tree;
+	GtkWidget      *search;
+	GtkWidget      *html_view;
 
-	GtkWidget *hpaned;
-        GtkWidget *notebook;
-        GtkWidget *book_tree;
-	GtkWidget *search;
-	GtkWidget *html_view;
+	EggMenuMerge   *merge;
+	EggActionGroup *action_group;
 };
 
-static void window_class_init                (DhWindowClass *klass);
-static void window_init                      (DhWindow      *window);
+static void window_class_init                (DhWindowClass      *klass);
+static void window_init                      (DhWindow           *window);
  
-static void window_destroy                   (GtkObject          *object);
+static void window_finalize                  (GObject            *object);
 
-static void window_populate                  (DhWindow      *window);
+static void window_populate                  (DhWindow           *window);
 
 static void window_activate_action           (EggAction          *action,
 					      DhWindow           *window);
@@ -83,36 +84,22 @@ static void window_link_selected_cb          (GObject            *ignored,
 					      DhLink             *link,
 					      DhWindow           *window);
 
-static void window_on_url_cb                 (DhWindow      *window,
+static void window_on_url_cb                 (DhWindow           *window,
 					      gchar              *url,
 					      gpointer            ignored);
 
 static void window_note_change_page_cb       (GtkWidget          *child,
 					      GtkNotebook        *notebook);
-
-static void window_note_page_mapped_cb       (GtkWidget          *page, 
-					      GtkAccelGroup      *accel_group);
-
-static void window_note_page_unmapped_cb     (GtkWidget          *page, 
-					      GtkAccelGroup      *accel_group);
-
-
-static void window_note_page_setup_signals   (GtkWidget          *page, 
-					      GtkAccelGroup      *accel);
-
-static void 
-window_notebook_append_page_with_accelerator (GtkNotebook        *notebook,
-					      GtkWidget          *page,
-					      gchar              *label_text,
-					      GtkAccelGroup      *accel);
-
+static void window_merge_add_widget          (EggMenuMerge       *merge,
+					      GtkWidget          *widget,
+					      DhWindow           *window);
 
 static GtkWindowClass *parent_class = NULL;
 
 static EggActionGroupEntry actions[] = {
 	{ "StockFileMenuAction", N_("_File"), NULL, NULL, NULL, NULL, NULL },
-	{ "StockGoMenuAction", N_("_File"), NULL, NULL, NULL, NULL, NULL },
-	{ "StockHelpMenuAction", N_("_File"), NULL, NULL, NULL, NULL, NULL },
+	{ "StockGoMenuAction", N_("_Go"), NULL, NULL, NULL, NULL, NULL },
+	{ "StockHelpMenuAction", N_("_Help"), NULL, NULL, NULL, NULL, NULL },
 
 	/* File menu */
 	{ "QuitAction", NULL, GTK_STOCK_QUIT, "<control>Q", NULL,
@@ -121,7 +108,7 @@ static EggActionGroupEntry actions[] = {
 	/* Go menu */
 	{ "BackAction", NULL, GTK_STOCK_GO_BACK, NULL, NULL,
 	  G_CALLBACK (window_activate_action), NULL },
-	{ "QuitAction", NULL, GTK_STOCK_GO_FORWARD, NULL, NULL,
+	{ "ForwardAction", NULL, GTK_STOCK_GO_FORWARD, NULL, NULL,
 	  G_CALLBACK (window_activate_action), NULL },
 
 	/* About menu */
@@ -129,24 +116,27 @@ static EggActionGroupEntry actions[] = {
 	  G_CALLBACK (window_activate_action), NULL }
 };
 
-GtkType
+GType
 dh_window_get_type (void)
 {
-        static GtkType type = 0;
+        static GType type = 0;
 
         if (!type) {
-                static const GtkTypeInfo info = {
-                        "DhWindow",
-                        sizeof (DhWindow),
-                        sizeof (DhWindowClass),
-                        (GtkClassInitFunc)  window_class_init,
-                        (GtkObjectInitFunc) window_init,
-                        /* reserved_1 */ NULL,
-                        /* reserved_2 */ NULL,
-                        (GtkClassInitFunc) NULL,
-                };
-
-                type = gtk_type_unique (GTK_TYPE_WINDOW, &info);
+                static const GTypeInfo info = {
+			sizeof (DhWindowClass),
+			NULL, 
+			NULL,
+			(GClassInitFunc) window_class_init,
+			NULL,
+			NULL,
+			sizeof (DhWindow),
+			0,
+			(GInstanceInitFunc) window_init
+		};
+		
+                type = g_type_register_static (GTK_TYPE_WINDOW, 
+					       "DhWIndow",
+					       &info, 0);
         }
 
         return type;
@@ -155,13 +145,13 @@ dh_window_get_type (void)
 static void
 window_class_init (DhWindowClass *klass)
 {
-        GtkObjectClass *object_class;
+        GObjectClass *object_class;
         
         parent_class = gtk_type_class (GTK_TYPE_WINDOW);
 
-        object_class = (GtkObjectClass *) klass;
+        object_class = (GObjectClass *) klass;
         
-        object_class->destroy = window_destroy;
+        object_class->finalize = window_finalize;
 }
 
 static void
@@ -169,23 +159,43 @@ window_init (DhWindow *window)
 {
         DhWindowPriv *priv;
 
-        priv         = g_new0 (DhWindowPriv, 1);
+        priv          = g_new0 (DhWindowPriv, 1);
 	priv->history = dh_history_new ();
 	
+	priv->merge   = egg_menu_merge_new ();
+
+	priv->main_box = gtk_vbox_new (FALSE, 0);
+	gtk_widget_show (priv->main_box);
+	
+	priv->menu_box = gtk_vbox_new (FALSE, 0);
+	gtk_widget_show (priv->menu_box);
+	gtk_container_set_border_width (GTK_CONTAINER (priv->menu_box), 0);
+	gtk_box_pack_start (GTK_BOX (priv->main_box), priv->menu_box, 
+			    FALSE, TRUE, 0);
+	
+	gtk_container_add (GTK_CONTAINER (window), priv->main_box);
+
+	g_signal_connect (priv->merge,
+			  "add_widget",
+			  G_CALLBACK (window_merge_add_widget),
+			  window);
+
+	priv->action_group = egg_action_group_new ("MainWindow");
+	
+	egg_action_group_add_actions (priv->action_group,
+				      actions,
+				      G_N_ELEMENTS (actions));
+
+	egg_menu_merge_insert_action_group (priv->merge,
+					    priv->action_group,
+					    0);
+
         window->priv = priv;
 }
 
 static void
-window_destroy (GtkObject *object)
+window_finalize (GObject *object)
 {
-}
-
-static void
-window_note_change_page_cb (GtkWidget *child, GtkNotebook *notebook)
-{
-	gint page = gtk_notebook_page_num (notebook, child);
-
-	gtk_notebook_set_page (notebook, page);
 }
 
 static void
@@ -197,21 +207,21 @@ window_populate (DhWindow *window)
 	GtkWidget    *book_tree_sw;
 	GNode        *contents_tree;
 	GSList       *keywords;
-	GtkWidget    *vbox;
+	GError       *error = NULL;
 	 
         g_return_if_fail (window != NULL);
         g_return_if_fail (DH_IS_WINDOW (window));
         
         priv = window->priv;
-
-	vbox            = gtk_vbox_new (FALSE, 0);
-	priv->statusbar = gtk_statusbar_new ();
-/* 	gtk_box_pack_end_defaults (GTK_BOX (vbox), priv->statusbar); */
+	
+	egg_menu_merge_add_ui_from_file (priv->merge,
+					 DATADIR "/devhelp/ui/window.ui",
+					 &error);
 
         priv->hpaned    = gtk_hpaned_new ();
         priv->notebook  = gtk_notebook_new ();
 	priv->html_view = dh_html_new ();
-	html_sw           = gtk_scrolled_window_new (NULL, NULL);
+	html_sw         = gtk_scrolled_window_new (NULL, NULL);
 	gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (html_sw),
 					GTK_POLICY_AUTOMATIC,
 					GTK_POLICY_AUTOMATIC);
@@ -270,10 +280,8 @@ window_populate (DhWindow *window)
 #endif
 	gtk_widget_show_all (priv->hpaned);
 
-	gtk_box_pack_end (GTK_BOX (vbox), priv->hpaned,
-			  TRUE, TRUE, 0);
-	
-	gtk_container_add (GTK_CONTAINER (window), vbox);
+	gtk_box_pack_start (GTK_BOX (priv->main_box), priv->hpaned,
+			    TRUE, TRUE, 0);
 
  	g_signal_connect_swapped (HTML_VIEW (priv->html_view),
 				  "uri_selected", 
@@ -368,21 +376,6 @@ window_delete_cb (GtkWidget   *widget,
 	gtk_main_quit ();
 }
 
-static void
-window_link_selected_cb (GObject *ignored, DhLink *link, DhWindow *window)
-{
-	DhWindowPriv   *priv;
-
-	g_return_if_fail (link != NULL);
-	g_return_if_fail (DH_IS_WINDOW (window));
-	
-	priv = window->priv;
-
-	if (window_open_url (window, link->uri)) {
-		dh_history_goto (priv->history, link->uri);
-	}
-}
-
 static gboolean 
 window_open_url (DhWindow *window, const gchar *url)
 {
@@ -405,6 +398,21 @@ window_open_url (DhWindow *window, const gchar *url)
 }
 
 static void
+window_link_selected_cb (GObject *ignored, DhLink *link, DhWindow *window)
+{
+	DhWindowPriv   *priv;
+
+	g_return_if_fail (link != NULL);
+	g_return_if_fail (DH_IS_WINDOW (window));
+	
+	priv = window->priv;
+
+	if (window_open_url (window, link->uri)) {
+		dh_history_goto (priv->history, link->uri);
+	}
+}
+
+static void
 window_on_url_cb (DhWindow *window, gchar *url, gpointer ignored)
 {
 	DhWindowPriv *priv;
@@ -419,6 +427,33 @@ window_on_url_cb (DhWindow *window, gchar *url, gpointer ignored)
 		status_text = g_strdup_printf (_("Open %s"), url);
 		g_free (status_text);
 	}
+}
+
+static void
+window_note_change_page_cb (GtkWidget *child, GtkNotebook *notebook)
+{
+	gint page = gtk_notebook_page_num (notebook, child);
+
+	gtk_notebook_set_page (notebook, page);
+}
+
+static void
+window_merge_add_widget (EggMenuMerge *merge,
+			 GtkWidget    *widget,
+			 DhWindow     *window)
+{
+	DhWindowPriv *priv;
+	
+	g_return_if_fail (DH_IS_WINDOW (window));
+
+	priv = window->priv;
+
+	g_print ("Fooooo\n");
+	
+	gtk_box_pack_start (GTK_BOX (priv->menu_box), widget,
+			    FALSE, FALSE, 0);
+	
+	gtk_widget_show (widget);
 }
 
 GtkWidget *
