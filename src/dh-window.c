@@ -158,6 +158,7 @@ static void
 window_init (DhWindow *window)
 {
         DhWindowPriv *priv;
+	gint          i;
 
         priv          = g_new0 (DhWindowPriv, 1);
 	priv->history = dh_history_new ();
@@ -179,6 +180,10 @@ window_init (DhWindow *window)
 			  "add_widget",
 			  G_CALLBACK (window_merge_add_widget),
 			  window);
+
+	for (i = 0; i < G_N_ELEMENTS (actions); ++i) {
+		actions[i].user_data = window;
+	}
 
 	priv->action_group = egg_action_group_new ("MainWindow");
 	
