@@ -41,32 +41,25 @@ typedef struct _DhSearch       DhSearch;
 typedef struct _DhSearchClass  DhSearchClass;
 typedef struct _DhSearchPriv   DhSearchPriv;
 
-struct _DhSearch
-{
-        GObject             parent;
+struct _DhSearch {
+        GtkVBox        parent;
         
         DhSearchPriv  *priv;
 };
 
-struct _DhSearchClass
-{
-        GObjectClass        parent_class;
+struct _DhSearchClass {
+        GtkVBoxClass   parent_class;
 
         /* Signals */
-        void (*search_match)  (DhSearch       *search,
-                               const gchar         *string);
+        void (*search_match)  (DhSearch          *search,
+                               const gchar       *string);
         
-        void (*uri_selected)  (DhSearch       *search,
-                               const GnomeVFSURI   *uri);
-       
-        
+        void (*uri_selected)  (DhSearch          *search,
+                               const GnomeVFSURI *uri);
 };
 
 GType            dh_search_get_type           (void);
-DhSearch *       dh_search_new                (DhBookshelf    *bookshelf);
-
-GtkWidget *      dh_search_get_entry_widget   (DhSearch       *search);
-GtkWidget *      dh_search_get_result_widget  (DhSearch       *search);
+GtkWidget *      dh_search_new                (DhBookshelf    *bookshelf);
 
 void             dh_search_set_search_string  (DhSearch       *search,
 					       const gchar    *str);

@@ -32,26 +32,8 @@
 #include <gtk/gtktreeselection.h>
 #include <gtk/gtktreestore.h>
 #include <libgnomevfs/gnome-vfs.h>
-#include "book.h"
-#include "dh-bookshelf.h"
+
 #include "dh-book-tree.h"
-
-static void book_tree_class_init           (DhBookTreeClass       *klass);
-static void book_tree_init                 (DhBookTree            *tree);
-
-static void book_tree_destroy              (GtkObject             *object);
-
-static void book_tree_add_columns          (DhBookTree            *tree);
-static void book_tree_setup_selection      (DhBookTree            *tree);
-static void book_tree_populate_tree        (DhBookTree            *tree);
-static void book_tree_insert_book_node     (DhBookTree            *tree,
-					    GtkTreeIter           *parent_iter,
-					    BookNode              *book_node);
-static void book_tree_create_pixbufs       (DhBookTree            *tree);
-static void book_tree_selection_changed_cb (GtkTreeSelection      *selection,
-					    DhBookTree            *tree);
-
-static GtkTreeViewClass *parent_class = NULL;
 
 typedef struct {
         GdkPixbuf *pixbuf_opened;
@@ -59,8 +41,32 @@ typedef struct {
         GdkPixbuf *pixbuf_helpdoc;
 } DhBookTreePixbufs;
 
+struct _DhBookTreePriv {
+	GtkTreeStore      *store;
+
+	DhBookTreePixbufs *pixbufs;
+ 	GNode             *link_tree;
+};
+
+static void book_tree_class_init           (DhBookTreeClass      *klass);
+static void book_tree_init                 (DhBookTree           *tree);
+
+static void book_tree_destroy              (GtkObject            *object);
+
+static void book_tree_add_columns          (DhBookTree           *tree);
+static void book_tree_setup_selection      (DhBookTree           *tree);
+static void book_tree_populate_tree        (DhBookTree           *tree);
+static void book_tree_insert_node          (DhBookTree           *tree,
+					    GNode                *node,
+					    GtkTreeIter          *parent_iter);
+static void book_tree_create_pixbufs       (DhBookTree           *tree);
+static void book_tree_selection_changed_cb (GtkTreeSelection     *selection,
+					    DhBookTree           *tree);
+
+static GtkTreeViewClass *parent_class = NULL;
+
 enum {
-        URI_SELECTED,
+        LINK_SELECTED,
         LAST_SIGNAL
 };
 
@@ -68,19 +74,11 @@ enum {
 	COL_OPEN_PIXBUF,
 	COL_CLOSED_PIXBUF,
 	COL_TITLE,
-	COL_NODE,
+	COL_LINK,
 	N_COLUMNS
 };
 
 static gint signals[LAST_SIGNAL] = { 0 };
-
-struct _DhBookTreePriv {
-        DhBookshelf       *bookshelf;
-	GtkTreeStore      *store;
-
-	DhBookTreePixbufs *pixbufs;
-	GHashTable        *node_rows;
-};
 
 GType
 dh_book_tree_get_type (void)
@@ -121,17 +119,16 @@ book_tree_class_init (DhBookTreeClass *klass)
 	
 	object_class->destroy = book_tree_destroy;
 	
-        signals[URI_SELECTED] =
-                g_signal_new ("uri_selected",
+        signals[LINK_SELECTED] =
+                g_signal_new ("link_selected",
 			      G_TYPE_FROM_CLASS (object_class),
 			      G_SIGNAL_RUN_LAST,
 			      G_STRUCT_OFFSET (DhBookTreeClass,
-					       uri_selected),
+					       link_selected),
 			      NULL, NULL,
 			      g_cclosure_marshal_VOID__POINTER,
 			      G_TYPE_NONE,
 			      1, G_TYPE_POINTER);
-
 }
 
 static void
@@ -140,19 +137,17 @@ book_tree_init (DhBookTree *tree)
         DhBookTreePriv *priv;
         
         priv            = g_new0 (DhBookTreePriv, 1);
-        priv->bookshelf = NULL;
 	priv->store     = gtk_tree_store_new (N_COLUMNS, 
 					      GDK_TYPE_PIXBUF,
 					      GDK_TYPE_PIXBUF,
 					      G_TYPE_STRING,
 					      G_TYPE_POINTER);
 
-	priv->node_rows = g_hash_table_new (g_direct_hash,
-					    g_direct_equal);
-        tree->priv      = priv;
+        tree->priv = priv;
 
 	gtk_tree_view_set_model (GTK_TREE_VIEW (tree), 
 				 GTK_TREE_MODEL (priv->store));
+
 	gtk_tree_view_set_headers_visible (GTK_TREE_VIEW (tree), FALSE);
 	
 	book_tree_create_pixbufs (tree);
@@ -230,77 +225,66 @@ static void
 book_tree_populate_tree (DhBookTree *tree)
 {
         DhBookTreePriv *priv;
-	GSList         *books;
-	Book           *book;
-	GSList         *chapters;
-	gchar          *text[1];
+	GNode          *node;
+	DhLink         *link;
 	
 	g_return_if_fail (tree != NULL);
         g_return_if_fail (DH_IS_BOOK_TREE (tree));
 
-        priv  = tree->priv;
-	books = dh_bookshelf_get_books (priv->bookshelf);
+        priv = tree->priv;
 
-	for (; books; books = books->next) {
-		book = BOOK (books->data);
+	/* Use the link tree ... */
+/* 	books = dh_bookshelf_get_books (priv->bookshelf); */
 
-		book_tree_insert_book_node (tree, NULL, book_get_root (book));
+	for (node = g_node_first_child (priv->link_tree);
+	     node;
+	     node = g_node_next_sibling (node)) {
+		book_tree_insert_node (tree, node, NULL);
 	}
 }
 
 static void
-book_tree_insert_book_node (DhBookTree   *tree, 
-			     GtkTreeIter *parent_iter,
-                             BookNode    *book_node)
+book_tree_insert_node (DhBookTree  *tree, 
+		       GNode       *node,
+		       GtkTreeIter *parent_iter)
+
 {
-        DhBookTreePriv       *priv;
-	GSList              *chapters;
-	gchar               *text;
-	Book                *book;
-	Document            *document;
+        DhBookTreePriv      *priv;
 	GtkTreeIter          iter;
 	GtkTreePath         *path;
 	GtkTreeRowReference *row;
+	DhLink              *link;
+	GNode               *child;
         
-        g_return_if_fail (tree != NULL);
         g_return_if_fail (DH_IS_BOOK_TREE (tree));
-	g_return_if_fail (book_node != NULL);
+	g_return_if_fail (node != NULL);
 
-        priv    = tree->priv;
+        priv = tree->priv;
+	link = (DhLink *) node->data;
+	
+	gtk_tree_store_append (priv->store, &iter, parent_iter);
 
-	text = (gchar *) book_node_get_title (book_node);
-
-	if (book_node_is_chapter (book_node)) {
-		document = book_node_get_document (book_node);
-		book = document_get_book (document);
-
-		/* Is the book hidden, then skip */
-		if (book_is_visible (book) == FALSE) {
-			return;
-		}
-
-		gtk_tree_store_append (priv->store, &iter, parent_iter);
+	if (link->type == DH_LINK_TYPE_BOOK) {
 		gtk_tree_store_set (priv->store, &iter, 
 				    COL_OPEN_PIXBUF, 
 				    priv->pixbufs->pixbuf_opened,
 				    COL_CLOSED_PIXBUF, 
 				    priv->pixbufs->pixbuf_closed,
 				    COL_TITLE, 
-				    text, 
-				    COL_NODE, 
-				    book_node,
+				    link->name,
+				    COL_LINK, 
+				    link,
 				    -1);
 	} else {
-		gtk_tree_store_append (priv->store, &iter, parent_iter);
 		gtk_tree_store_set (priv->store, &iter, 
 				    COL_OPEN_PIXBUF, 
 				    priv->pixbufs->pixbuf_helpdoc,
 				    COL_CLOSED_PIXBUF, 
 				    priv->pixbufs->pixbuf_helpdoc,
 				    COL_TITLE, 
-				    text, 
-				    COL_NODE,
-				    book_node,
+				    link->name,
+				    COL_LINK, 
+				    link,
 				    -1);
 	}
 	
@@ -308,13 +292,13 @@ book_tree_insert_book_node (DhBookTree   *tree,
 	row = gtk_tree_row_reference_new (GTK_TREE_MODEL (priv->store), path);
 	gtk_tree_path_free (path);
 
-	g_hash_table_insert (priv->node_rows, book_node, row);
+	/* FIXME: Do we need this? */
+/* 	g_hash_table_insert (priv->node_rows, book_node, row); */
 
-	chapters = book_node_get_contents (book_node);
-	
-	for (; chapters; chapters = chapters->next) {
-		book_tree_insert_book_node (tree, &iter,
-					    (BookNode *) chapters->data);
+	for (child = g_node_first_child (node);
+	     child;
+	     child = g_node_next_sibling (child)) {
+		book_tree_insert_node (tree, child, &iter);
 	}
 }
 
@@ -323,7 +307,6 @@ book_tree_create_pixbufs (DhBookTree *tree)
 {
  	DhBookTreePixbufs *pixbufs;
 	
-        g_return_if_fail (tree != NULL);
         g_return_if_fail (DH_IS_BOOK_TREE (tree));
 	
 	pixbufs = g_new0 (DhBookTreePixbufs, 1);
@@ -340,49 +323,29 @@ book_tree_selection_changed_cb (GtkTreeSelection *selection, DhBookTree *tree)
 {
 	GtkTreeModel *model;
 	GtkTreeIter   iter;
-	BookNode     *book_node;
-	GnomeVFSURI  *uri;
+	DhLink       *link;
 	
 	g_return_if_fail (GTK_IS_TREE_SELECTION (selection));
 	g_return_if_fail (DH_IS_BOOK_TREE (tree));
 
 	if (gtk_tree_selection_get_selected (selection, NULL, &iter)) {
 		gtk_tree_model_get (GTK_TREE_MODEL (tree->priv->store), 
-				    &iter, COL_NODE, &book_node, -1);
+				    &iter, COL_LINK, &link, -1);
 
-		
-		if (book_node) {
-			g_signal_handlers_block_by_func
-				(selection, 
-				 book_tree_selection_changed_cb,
-				 tree);
- 
-			dh_bookshelf_open_document (tree->priv->bookshelf, 
-						    book_node_get_document (book_node));
+		g_print ("emiting '%s'\n", link->uri);
 
-			uri = book_node_get_uri (book_node, NULL);
-
-			g_signal_emit (G_OBJECT (tree),
-				       signals[URI_SELECTED], 
-				       0,
-				       uri);
-//			gnome_vfs_uri_unref (uri);
-			g_signal_handlers_unblock_by_func
-				(selection, 
-				 book_tree_selection_changed_cb,
-				 tree);
-		}
+		g_signal_emit (tree, signals[LINK_SELECTED], 0, link);
 	}
 }
 
 GtkWidget *
-dh_book_tree_new (DhBookshelf *bookshelf)
+dh_book_tree_new (GNode *books)
 {
         DhBookTree *tree;
 
 	tree = g_object_new (DH_TYPE_BOOK_TREE, NULL);
 
-        tree->priv->bookshelf = bookshelf;
+        tree->priv->link_tree = books;
 
         book_tree_populate_tree (tree);
 	
@@ -390,14 +353,16 @@ dh_book_tree_new (DhBookshelf *bookshelf)
 }
 
 void
-dh_book_tree_open_node (DhBookTree *tree, BookNode *book_node)
+dh_book_tree_show_link (DhBookTree *tree, DhLink *link)
 {
 	GtkTreeSelection    *selection;
+#if 0
 	GtkTreeRowReference *row;
 	GtkTreePath         *path;
-	
+
 	selection = gtk_tree_view_get_selection (GTK_TREE_VIEW (tree));
 
+	/* FIXME: Hmm .. */
 	row = g_hash_table_lookup (tree->priv->node_rows, book_node);
 	g_return_if_fail (row != NULL);
 
@@ -418,67 +383,5 @@ dh_book_tree_open_node (DhBookTree *tree, BookNode *book_node)
 		 tree);
 
 	gtk_tree_path_free (path);
-}
-
-void
-dh_book_tree_add_book (DhBookTree *tree, Book *book)
-{
-	g_return_if_fail (tree != NULL);
-        g_return_if_fail (DH_IS_BOOK_TREE (tree));
-        g_return_if_fail (book != NULL);
-        g_return_if_fail (IS_BOOK (book));
-
-        book_tree_insert_book_node (tree, NULL, book_get_root (book));
-}
-
-void
-dh_book_tree_remove_book (DhBookTree *tree, Book *book)
-{
-#if 0
-        DhBookTreePriv   *priv;
-        GtkCTreeNode    *node;
-   
-	g_return_if_fail (tree != NULL);
-        g_return_if_fail (DH_IS_BOOK_TREE (tree));
-        g_return_if_fail (book != NULL);
-        g_return_if_fail (IS_BOOK (book));
-
-        priv = tree->priv;
-        
-        gtk_clist_freeze (GTK_CLIST (tree));
-   
-        node = gtk_ctree_find_by_row_data (GTK_CTREE (tree),
-					   NULL,
-					   book_get_root (book));
-   
-        gtk_ctree_remove_node (GTK_CTREE (tree), node);
-					
-        gtk_clist_sort (GTK_CLIST (tree));
-	
-        gtk_clist_thaw (GTK_CLIST (tree));
 #endif
 }
-
-GtkWidget *
-dh_book_tree_get_scrolled (DhBookTree *tree)
-{
-	DhBookTreePriv   *priv;
- 	GtkWidget       *sw;
-
- 	g_return_val_if_fail (tree != NULL, NULL);
- 	g_return_val_if_fail (DH_IS_BOOK_TREE (tree), NULL);
-
-	priv = tree->priv;
-	
-	sw = gtk_scrolled_window_new (NULL, NULL);
-	gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (sw),
-					GTK_POLICY_AUTOMATIC,
-					GTK_POLICY_AUTOMATIC);
-	gtk_scrolled_window_set_shadow_type (GTK_SCROLLED_WINDOW (sw),
-					     GTK_SHADOW_IN);
-
-	gtk_container_add (GTK_CONTAINER (sw), GTK_WIDGET (tree));
-
-	return sw;
-}
-
