@@ -275,11 +275,11 @@ window_populate (DhWindow *window)
 	
 	gtk_container_add (GTK_CONTAINER (window), vbox);
 
- 	g_signal_connect_object (G_OBJECT (HTML_VIEW (priv->html_view)->document),
-				 "link_clicked", 
-				 G_CALLBACK (window_link_selected_cb),
-				 G_OBJECT (window),
-				 0);
+ 	g_signal_connect_swapped (HTML_VIEW (priv->html_view),
+				  "uri_selected", 
+				  G_CALLBACK (window_open_url),
+				  window);
+
 	/* TODO: Look in gtkhtml2 code or ask jborg */
 #if GNOME2_PORT_COMPLETE	
 	g_signal_connect_object (G_OBJECT (HTML_VIEW (priv->html_view)->document),
@@ -398,49 +398,10 @@ window_open_url (DhWindow *window, const gchar *url)
 
 	priv = window->priv;
 
-	g_print ("Calling html_open_uri[%s]\n", url);
-	
 	dh_html_open_uri (DH_HTML (priv->html_view), url);
-	
-#if 0	
-	
+	dh_book_tree_show_uri (DH_BOOK_TREE (priv->book_tree), url);
 
-	doc = dh_bookshelf_find_document (priv->bookshelf, url, &anchor);
-	
-	if (doc) { 
-		node = dh_bookshelf_find_node (priv->bookshelf, doc, anchor);
-
-		if (node) {
-			dh_bookshelf_open_document (priv->bookshelf, doc);
-			priv->current_node = node;
-			
-/* 			gtk_signal_handler_block_by_func  */
-/* 				(GTK_OBJECT (priv->book_tree), */
-/* 				 GTK_SIGNAL_FUNC (controller_uri_cb), */
-/* 				 controller);  */
-			
-			dh_book_tree_open_node (priv->book_tree, node);
-			
-/* 			gtk_signal_handler_unblock_by_func  */
-/* 				(GTK_OBJECT (priv->book_tree),  */
-/* 				 GTK_SIGNAL_FUNC (controller_uri_cb),  */
-/* 				 controller); */
-		
-			uri = book_node_get_uri (node, anchor);
-
-			str_uri = gnome_vfs_uri_to_string (uri, GNOME_VFS_URI_HIDE_NONE);
-			
-/* 			controller_emit_uri (controller, str_uri); */
-		
-			g_free (str_uri);
-
-			return TRUE;
-		}
-	}
-	
-#endif
-
-	return FALSE;
+	return TRUE;
 }
 
 static void

@@ -35,6 +35,8 @@
 
 #include "dh-book-tree.h"
 
+#define d(x)
+
 typedef struct {
         GdkPixbuf *pixbuf_opened;
         GdkPixbuf *pixbuf_closed;
@@ -332,7 +334,7 @@ book_tree_selection_changed_cb (GtkTreeSelection *selection, DhBookTree *tree)
 		gtk_tree_model_get (GTK_TREE_MODEL (tree->priv->store), 
 				    &iter, COL_LINK, &link, -1);
 
-		g_print ("emiting '%s'\n", link->uri);
+		d(g_print ("emiting '%s'\n", link->uri));
 
 		g_signal_emit (tree, signals[LINK_SELECTED], 0, link);
 	}
@@ -353,7 +355,7 @@ dh_book_tree_new (GNode *books)
 }
 
 void
-dh_book_tree_show_link (DhBookTree *tree, DhLink *link)
+dh_book_tree_show_uri (DhBookTree *tree, const gchar *uri)
 {
 	GtkTreeSelection    *selection;
 #if 0
