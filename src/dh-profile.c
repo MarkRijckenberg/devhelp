@@ -34,7 +34,7 @@ struct _DhProfilePriv {
         gchar    *name;
 	GSList   *books;
         GNode    *book_tree;
-	GSList   *keywords;
+	GList    *keywords;
 
 	gboolean  open;
 };
@@ -182,7 +182,7 @@ dh_profile_new (void)
 }
 
 GNode *   
-dh_profile_open (DhProfile *profile, GSList **keywords, GError **error)
+dh_profile_open (DhProfile *profile, GList **keywords, GError **error)
 {
 	DhProfilePriv *priv;
 

@@ -29,31 +29,28 @@ devhelp_2_LTLIBRARIES =				\
 libdevhelp2_la_SOURCES =			\
 	dh-base.c				\
 	dh-base.h				\
-	dh-window.c				\
-	dh-window.h				\
-	dh-html.c				\
-	dh-html.h				\
-	dh-link.c				\
-	dh-link.h				\
-	book.c					\
-	book.h					\
-	book-node.h				\
 	dh-book-parser.c			\
 	dh-book-parser.h			\
 	dh-book-tree.c				\
 	dh-book-tree.h				\
-	dh-bookshelf.c				\
-	dh-bookshelf.h                     	\
+	dh-history.c                            \
+	dh-history.h                            \
+	dh-html.c				\
+	dh-html.h				\
+	dh-keyword-model.c			\
+	dh-keyword-model.h			\
+	dh-link.c				\
+	dh-link.h				\
 	dh-marshal.c				\
 	dh-marshal.h				\
 	dh-profile.c				\
 	dh-profile.h				\
-	function-database.c			\
-	function-database.h			\
-	dh-history.c                            \
-	dh-history.h                            \
+	dh-search.c				\
+	dh-search.h				\
 	dh-util.c				\
-	dh-util.h
+	dh-util.h				\
+	dh-window.c				\
+	dh-window.h			
 
 libdevhelp2_la_LIBADD =				\
 	@LIBDEVHELP_LIBS@			\

@@ -30,14 +30,14 @@
 #include "dh-book-parser.h"
 
 static gboolean   book_parser_parse_book        (GNode         *book_tree,
-						 GSList       **keywords,
+						 GList        **keywords,
 						 const gchar   *path,
 						 GError       **error);
 static gboolean   book_parser_parse_chapter     (GNode         *root,
 						 xmlNode       *node,
 						 const gchar   *base_uri,
 						 GError       **error);
-static gboolean   book_parser_parse_function    (GSList       **keywords,
+static gboolean   book_parser_parse_function    (GList        **keywords,
 						 xmlNode       *node,
 						 const gchar   *base_uri,
 						 GError       **error);
@@ -47,7 +47,7 @@ static gchar *    book_parser_get_base_uri      (const gchar   *spec_path,
 
 static gboolean
 book_parser_parse_book (GNode        *book_tree,
-			GSList      **keywords, 
+			GList       **keywords, 
 			const gchar  *path,
 			GError      **error)
 {
@@ -226,7 +226,7 @@ book_parser_parse_chapter (GNode        *parent,
 }
 
 static gboolean
-book_parser_parse_function (GSList      **keywords, 
+book_parser_parse_function (GList       **keywords, 
 			    xmlNode      *node, 
 			    const gchar  *base_uri,
 			    GError      **error)
@@ -262,7 +262,7 @@ book_parser_parse_function (GSList      **keywords,
 	g_free (uri);
 	xmlFree (name);
 	
-	*keywords = g_slist_prepend (*keywords, link);
+	*keywords = g_list_prepend (*keywords, link);
 
 	return TRUE;
 }
@@ -309,7 +309,7 @@ book_parser_get_base_uri (const gchar *spec_path,
 gboolean
 dh_book_parser_read_books (GSList  *books,
 			   GNode   *book_tree, 
-			   GSList **keywords, 
+			   GList  **keywords, 
 			   GError **error)
 {
 	GSList *l;

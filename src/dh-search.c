@@ -38,57 +38,17 @@
 #include <libgnome/gnome-i18n.h>
 #include <string.h>
 
-#include "dh-index-model.h"
-#include "dh-html.h"
 #include "dh-marshal.h"
-#include "dh-reader.h"
-#include "function-database.h"
+#include "dh-keyword-model.h"
 #include "dh-search.h"
 
 #define d(x)
 
-static void  search_init                       (DhSearch       *view);
-static void  search_class_init                 (DhSearchClass  *klass);
-static void  search_search_selection_changed_cb (GtkTreeSelection    *selection,
-					       DhSearch       *content);
-static void  search_html_uri_selected_cb       (DhHtml            *html,
-						const gchar       *uri,
-					       gboolean             handled,
-					       DhSearch       *view);
-static void  search_entry_changed_cb           (GtkEntry            *entry,
-					       DhSearch       *view);
-static void  search_entry_activated_cb         (GtkEntry            *entry,
-					       DhSearch       *view);
-static void  search_entry_text_inserted_cb     (GtkEntry            *entry,
-					       const gchar         *text,
-					       gint                 length,
-					       gint                *position,
-					       DhSearch       *view);
-static gboolean search_complete_idle           (DhSearch       *view);
-static gboolean search_filter_idle             (DhSearch       *view);
-static gchar * search_complete_func            (Function       *function);
-
-#if 0
-static void  search_reader_data_cb             (DhpReader          *reader,
-						const gchar         *data,
-						gint                 len,
-					       DhSearch       *view);
-static void  search_reader_finished_cb         (DevhelpReader          *reader,
-					       DevhelpURI             *uri,
-					       DhSearch       *view);
-
-static void  search_show_uri                  (DevhelpView            *view,
-					       DevhelpURI             *search_uri,
-					       GError             **error);
-#endif
-
 struct _DhSearchPriv {
-	GtkWidget    *entry;
-	GtkWidget    *hitlist;
-	DhIndexModel *model;
+	DhKeywordModel *model;
 
-	/* Html view */
-	GtkWidget    *html_view;
+	GtkWidget      *entry;
+	GtkWidget      *hitlist;
 
 	GCompletion  *completion;
 
@@ -98,8 +58,37 @@ struct _DhSearchPriv {
 	gboolean      first;
 };
 
+
+static void  search_init                       (DhSearch       *search);
+static void  search_class_init                 (DhSearchClass  *klass);
+static void  search_finalize                   (GObject        *object);
+
+static void  search_selection_changed_cb       (GtkTreeSelection    *selection,
+						DhSearch       *content);
+static void  search_entry_changed_cb           (GtkEntry            *entry,
+						DhSearch       *search);
+static void  search_entry_activated_cb         (GtkEntry            *entry,
+						DhSearch       *search);
+static void  search_entry_text_inserted_cb     (GtkEntry            *entry,
+						const gchar         *text,
+						gint                 length,
+						gint                *position,
+						DhSearch       *search);
+static gboolean search_complete_idle           (DhSearch       *search);
+static gboolean search_filter_idle             (DhSearch       *search);
+static gchar *  search_complete_func           (DhLink         *link);
+
+
+enum {
+        LINK_SELECTED,
+        LAST_SIGNAL
+};
+
+static GtkVBox *parent_class;
+static gint     signals[LAST_SIGNAL] = { 0 };
+
 GType
-devhelp_search_get_type (void)
+dh_search_get_type (void)
 {
         static GType type = 0;
 
@@ -127,12 +116,34 @@ devhelp_search_get_type (void)
 }
 
 static void
-search_init (DhSearch *view)
+search_class_init (DhSearchClass *klass)
+{
+        GObjectClass   *object_class;
+	GtkWidgetClass *widget_class;
+	
+        object_class = (GObjectClass *) klass;
+        parent_class = g_type_class_peek_parent (klass);
+	
+	object_class->finalize = search_finalize;
+	
+        signals[LINK_SELECTED] =
+                g_signal_new ("link_selected",
+			      G_TYPE_FROM_CLASS (klass),
+			      G_SIGNAL_RUN_LAST,
+			      G_STRUCT_OFFSET (DhSearchClass, link_selected),
+			      NULL, NULL,
+			      g_cclosure_marshal_VOID__POINTER,
+			      G_TYPE_NONE,
+			      1, G_TYPE_POINTER);
+}
+
+static void
+search_init (DhSearch *search)
 {
 	DhSearchPriv *priv;
-	
+
 	priv = g_new0 (DhSearchPriv, 1);
-	view->priv = priv;
+	search->priv = priv;
 	
 	priv->idle_complete = 0;
 	priv->idle_filter   = 0;
@@ -141,141 +152,96 @@ search_init (DhSearch *view)
 		g_completion_new ((GCompletionFunc) search_complete_func);
 
 	priv->hitlist = gtk_tree_view_new ();
-	priv->model   = dh_index_model_new ();
+	priv->model   = dh_keyword_model_new ();
 
 	gtk_tree_view_set_model (GTK_TREE_VIEW (priv->hitlist),
 				 GTK_TREE_MODEL (priv->model));
-
-	priv->html_view = dh_html_new ();
-	
-	g_signal_connect (priv->html_view, "uri_selected",
-			  G_CALLBACK (search_html_uri_selected_cb),
-			  view);
-
-#if 0
-	priv->reader = devhelp_reader_new ();
-	
-	g_signal_connect (G_OBJECT (priv->reader), "data",
-			  G_CALLBACK (search_reader_data_cb),
-			  view);
-	g_signal_connect (G_OBJECT (priv->reader), "finished",
-			  G_CALLBACK (search_reader_finished_cb),
-			  view);
-#endif
 }
 
 static void
-search_class_init (DhSearchClass *klass)
+search_finalize (GObject *object)
 {
-/* 	DevhelpViewClass *view_class = DEVHELP_VIEW_CLASS (klass); */
-       
-/* 	view_class->show_uri = search_show_uri; */
+	
 }
 
 static void
-search_search_selection_changed_cb (GtkTreeSelection *selection, 
-				    DhSearch    *search)
+search_selection_changed_cb (GtkTreeSelection *selection, DhSearch *search)
 {
 	DhSearchPriv *priv;
  	GtkTreeIter   iter;
-	Function     *func;
 	
 	g_return_if_fail (GTK_IS_TREE_SELECTION (selection));
 	g_return_if_fail (DH_IS_SEARCH (search));
 
-	priv = view->priv;
+	priv = search->priv;
 
 	if (gtk_tree_selection_get_selected (selection, NULL, &iter)) {
-		DevhelpURI *search_uri;
+		DhLink *link;
 		
 		gtk_tree_model_get (GTK_TREE_MODEL (priv->model), &iter,
-				    DH_INDEX_MODEL_COL_FUNCTION, &function,
+				    DH_KEYWORD_MODEL_COL_LINK, &link,
 				    -1);
 
-		d(g_print ("Index View: selection changed: %s\n", 
-			   devhelp_uri_to_string (function->uri)));
-		
-		search_uri = devhelp_uri_to_index (section->uri);
-
-  		g_signal_emit_by_name (view, "uri_selected", search_uri, FALSE);
-
-		devhelp_uri_unref (search_uri);
+		g_signal_emit (search, signals[LINK_SELECTED], 0, link);
 	}
 }
 
 static void
-search_html_uri_selected_cb (DhHtml      *html, 
-			  DevhelpURI       *uri, 
-			  gboolean       handled,
-			  DhSearch *view)
-{
-	DevhelpURI *search_uri;
-
-	g_return_if_fail (DEVHELP_IS_VIEW_INDEX (view));
-
-	d(g_print ("Index View: uri selected: %s\n", 
-		   devhelp_uri_to_string (uri)));
-
-	search_uri = devhelp_uri_to_index (uri);
-	g_signal_emit_by_name (view, "uri_selected", search_uri, handled);
-	devhelp_uri_unref (search_uri);
-}
-
-static void
-search_entry_changed_cb (GtkEntry *entry, DhSearch *view)
+search_entry_changed_cb (GtkEntry *entry, DhSearch *search)
 {
 	DhSearchPriv *priv;
 	
 	g_return_if_fail (GTK_IS_ENTRY (entry));
-	g_return_if_fail (DEVHELP_IS_VIEW_INDEX (view));
+	g_return_if_fail (DH_IS_SEARCH (search));
 	
-	priv = view->priv;
+	priv = search->priv;
  
 	d(g_print ("Entry changed\n"));
 
 	if (!priv->idle_filter) {
 		priv->idle_filter =
-			g_idle_add ((GSourceFunc) search_filter_idle, view);
+			g_idle_add ((GSourceFunc) search_filter_idle, search);
 	}
 }
 
 static void
-search_entry_activated_cb (GtkEntry *entry, DhSearch *view)
+search_entry_activated_cb (GtkEntry *entry, DhSearch *search)
 {
 	DhSearchPriv *priv;
 	gchar             *str;
 	
 	g_return_if_fail (GTK_IS_ENTRY (entry));
-	g_return_if_fail (DEVHELP_IS_VIEW_INDEX (view));
+	g_return_if_fail (DH_IS_SEARCH (search));
 
-	priv = view->priv;
+	priv = search->priv;
 	
 	str = (gchar *) gtk_entry_get_text (GTK_ENTRY (priv->entry));
 	
-	devhelp_search_model_filter (view->priv->model, str);
+	dh_keyword_model_filter (priv->model, str);
 }
 
 static void
-search_entry_text_inserted_cb (GtkEntry      *entry,
-			    const gchar   *text,
-			    gint           length,
-			    gint          *position,
-			    DhSearch *view)
+search_entry_text_inserted_cb (GtkEntry    *entry,
+			       const gchar *text,
+			       gint         length,
+			       gint        *position,
+			       DhSearch    *search)
 {
 	DhSearchPriv *priv;
 	
- 	g_return_if_fail (DEVHELP_IS_VIEW_INDEX (view));
+ 	g_return_if_fail (DH_IS_SEARCH (search));
 	
-	priv = view->priv;
+	priv = search->priv;
 	
 	if (!priv->idle_complete) {
 		priv->idle_complete = 
-			g_idle_add ((GSourceFunc) search_complete_idle, view);
+			g_idle_add ((GSourceFunc) search_complete_idle, 
+				    search);
 	}
 }
 
 static gboolean
-search_complete_idle (DhSearch *view)
+search_complete_idle (DhSearch *search)
 {
 	DhSearchPriv *priv;
 	const gchar       *text;
@@ -283,9 +249,9 @@ search_complete_idle (DhSearch *view)
 	GList             *list;
 	gint               text_length;
 	
-	g_return_val_if_fail (DEVHELP_IS_VIEW_INDEX (view), FALSE);
+	g_return_val_if_fail (DH_IS_SEARCH (search), FALSE);
 	
-	priv = view->priv;
+	priv = search->priv;
 	
 	text = gtk_entry_get_text (GTK_ENTRY (priv->entry));
 
@@ -309,20 +275,20 @@ search_complete_idle (DhSearch *view)
 }
 
 static gboolean
-search_filter_idle (DhSearch *view)
+search_filter_idle (DhSearch *search)
 {
 	DhSearchPriv *priv;
 	gchar             *str;
 	
-	g_return_val_if_fail (DEVHELP_IS_VIEW_INDEX (view), FALSE);
+	g_return_val_if_fail (DH_IS_SEARCH (search), FALSE);
 
-	priv = view->priv;
+	priv = search->priv;
 
 	d(g_print ("Filter idle\n"));
 	
 	str = (gchar *) gtk_entry_get_text (GTK_ENTRY (priv->entry));
 	
-	devhelp_search_model_filter (view->priv->model, str);
+	dh_keyword_model_filter (priv->model, str);
 
 	priv->idle_filter = 0;
 
@@ -330,129 +296,28 @@ search_filter_idle (DhSearch *view)
 }
 
 static gchar *
-search_complete_func (Function *function)
+search_complete_func (DhLink *link)
 {
-	return function->name;
+	return link->name;
 }
 
-
-#if 0
-static void
-search_reader_data_cb (DevhelpReader    *reader,
-		    const gchar   *data,
-		    gint           len,
-		    DhSearch *view)
-{
-	DhSearchPriv *priv;
-	
-	g_return_if_fail (DEVHELP_IS_READER (reader));
-	g_return_if_fail (DEVHELP_IS_VIEW_INDEX (view));
-	
-	priv = view->priv;
-
-	if (priv->first) {
-		devhelp_html_clear (priv->html_view);
-		priv->first = FALSE;
-	}
-
-	if (len == -1) {
-		len = strlen (data);
-	}
-
-	if (len <= 0) {
-		return;
-	}
-
-	devhelp_html_write (priv->html_view, data, len);
-}
-
-static void
-search_reader_finished_cb (DevhelpReader    *reader,
-			DevhelpURI       *uri,
-			DhSearch *view)
-{
-	DhSearchPriv *priv;
-	
-	g_return_if_fail (DEVHELP_IS_READER (reader));
-	g_return_if_fail (DEVHELP_IS_VIEW_INDEX (view));
-
-	priv = view->priv;
- 
-	if (!priv->first) {
-		devhelp_html_close (priv->html_view);
-	}
-	
-	gdk_window_set_cursor (priv->html_widget->window, NULL);
-	gtk_widget_grab_focus (priv->html_widget);
-}
-
-static void
-search_show_uri (DevhelpView *view, DevhelpURI *search_uri, GError **error)
-{
-	DhSearchPriv *priv;
-	DevhelpURI           *uri;
-
-	g_return_if_fail (DEVHELP_IS_VIEW_INDEX (view));
-	g_return_if_fail (search_uri != NULL);
-	
-	priv = DEVHELP_VIEW_INDEX (view)->priv;
-
-	d(g_print ("Index show Uri: %s\n", devhelp_uri_to_string (search_uri)));
-
-	if (devhelp_uri_no_path (search_uri)) {
-		return;
-	}
-
-	uri = devhelp_uri_from_index (search_uri);
-
-	priv->first = TRUE;
-
-	devhelp_html_set_base_uri (priv->html_view, uri);
-
-	if (!devhelp_reader_start (priv->reader, uri)) {
-		gchar     *loading = _("Loading...");
-
-		devhelp_html_clear (priv->html_view);
-		
-		devhelp_html_printf (priv->html_view, 
-				  "<html><meta http-equiv=\"Content-Type\" "
-				  "content=\"text/html; charset=utf-8\">"
-				  "<title>%s</title>"
-				  "<body><center>%s</center></body>"
-				  "</html>", 
-				  loading, loading);
-
-		devhelp_html_close (priv->html_view);
-	}
-
-	/* FIXME: Handle the GError */
-/* 	devhelp_html_open_uri (priv->html_view, uri, error); */
-}
-
-#endif
 
 GtkWidget *
-devhelp_search_new (GList *index)
+dh_search_new (GList *keywords)
 {
-	DhSearch     *view;
-	DhSearchPriv *priv;
+	DhSearch          *search;
+	DhSearchPriv      *priv;
 	GtkTreeSelection  *selection;
-        GtkWidget         *html_sw;
         GtkWidget         *list_sw;
 	GtkWidget         *frame;
 	GtkWidget         *box;
 	GtkWidget         *hbox;
 	GtkWidget         *label;
-	GtkWidget         *hpaned;
 		
-	view = g_object_new (DEVHELP_TYPE_VIEW_INDEX, NULL);
-	priv = view->priv;
+	search = g_object_new (DH_TYPE_SEARCH, NULL);
+	priv = search->priv;
 
-	hpaned = DEVHELP_VIEW (view)->widget;
-
-	/* Setup the index box */
-	box = gtk_vbox_new (FALSE, 0);
-
+	/* Setup the keyword box */
 	hbox = gtk_hbox_new (FALSE, 0);
 	
 	label = gtk_label_new_with_mnemonic (_("_Search for:"));
@@ -465,19 +330,19 @@ devhelp_search_new (GList *index)
 
 	g_signal_connect (priv->entry, "changed", 
 			  G_CALLBACK (search_entry_changed_cb),
-			  view);
+			  search);
 
 	gtk_box_pack_end (GTK_BOX (hbox), priv->entry, FALSE, FALSE, 0);
 	
 	g_signal_connect (priv->entry, "activate",
 			  G_CALLBACK (search_entry_activated_cb),
-			  view);
+			  search);
 	
 	g_signal_connect (priv->entry, "insert-text",
 			  G_CALLBACK (search_entry_text_inserted_cb),
-			  view);
+			  search);
 
-	gtk_box_pack_start (GTK_BOX (box), hbox, 
+	gtk_box_pack_start (GTK_BOX (search), hbox, 
 			    FALSE, FALSE, 0);
 
 	frame = gtk_frame_new (NULL);
@@ -491,47 +356,31 @@ devhelp_search_new (GList *index)
 	gtk_container_add (GTK_CONTAINER (frame), list_sw);
 	
 	gtk_tree_view_insert_column_with_attributes (
-		GTK_TREE_VIEW (priv->search_view), -1,
+		GTK_TREE_VIEW (priv->hitlist), -1,
 		_("Section"), gtk_cell_renderer_text_new (),
 		"text", 0,
 		NULL);
 
-	gtk_tree_view_set_headers_visible (GTK_TREE_VIEW (priv->search_view),
+	gtk_tree_view_set_headers_visible (GTK_TREE_VIEW (priv->hitlist),
 					   FALSE);
 
 	selection = gtk_tree_view_get_selection (
-		GTK_TREE_VIEW (priv->search_view));
+		GTK_TREE_VIEW (priv->hitlist));
 
 	g_signal_connect (selection, "changed",
-			  G_CALLBACK (search_search_selection_changed_cb),
-			  view);
+			  G_CALLBACK (search_selection_changed_cb),
+			  search);
 	
-	gtk_container_add (GTK_CONTAINER (list_sw), priv->search_view);
+	gtk_container_add (GTK_CONTAINER (list_sw), priv->hitlist);
 
-	gtk_box_pack_end_defaults (GTK_BOX (box), frame);
+	gtk_box_pack_end_defaults (GTK_BOX (search), frame);
 
-        /* Setup the Html view */
- 	html_sw = gtk_scrolled_window_new (NULL, NULL);
-        gtk_scrolled_window_set_policy (GTK_SCROLLED_WINDOW (html_sw),
-                                        GTK_POLICY_AUTOMATIC,
-                                        GTK_POLICY_AUTOMATIC);
-	frame = gtk_frame_new (NULL);
-	gtk_container_add (GTK_CONTAINER (frame), html_sw);
-	gtk_frame_set_shadow_type (GTK_FRAME (frame), GTK_SHADOW_IN);
-	
-        gtk_container_add (GTK_CONTAINER (html_sw), priv->html_widget);
+	g_completion_add_items (priv->completion, keywords);
+	dh_keyword_model_set_words (priv->model, keywords);
 
-	/* Add the tree and html view to the paned */
-	gtk_paned_add1 (GTK_PANED (hpaned), box);
-        gtk_paned_add2 (GTK_PANED (hpaned), frame);
-        gtk_paned_set_position (GTK_PANED (hpaned), 250);
- 
-	d(g_print ("List length: %d\n", g_list_length (index)));
-	
-	g_completion_add_items (priv->completion, index);
-	devhelp_search_model_set_words (priv->model, index);
+	gtk_widget_show_all (GTK_WIDGET (search));
 
-	return DEVHELP_VIEW (view);
+	return GTK_WIDGET (search);
 }
 
 

@@ -53,7 +53,7 @@ struct _DhBookTreePriv {
 static void book_tree_class_init           (DhBookTreeClass      *klass);
 static void book_tree_init                 (DhBookTree           *tree);
 
-static void book_tree_destroy              (GtkObject            *object);
+static void book_tree_finalize             (GObject              *object);
 
 static void book_tree_add_columns          (DhBookTree           *tree);
 static void book_tree_setup_selection      (DhBookTree           *tree);
@@ -65,7 +65,6 @@ static void book_tree_create_pixbufs       (DhBookTree           *tree);
 static void book_tree_selection_changed_cb (GtkTreeSelection     *selection,
 					    DhBookTree           *tree);
 
-static GtkTreeViewClass *parent_class = NULL;
 
 enum {
         LINK_SELECTED,
@@ -80,7 +79,8 @@ enum {
 	N_COLUMNS
 };
 
-static gint signals[LAST_SIGNAL] = { 0 };
+static GtkTreeViewClass *parent_class = NULL;
+static gint              signals[LAST_SIGNAL] = { 0 };
 
 GType
 dh_book_tree_get_type (void)
@@ -111,19 +111,16 @@ dh_book_tree_get_type (void)
 static void
 book_tree_class_init (DhBookTreeClass *klass)
 {
-        GtkObjectClass *object_class;
-	GtkWidgetClass *widget_class;
+        GObjectClass   *object_class;
 	
-        object_class = (GtkObjectClass *) klass;
-	widget_class = (GtkWidgetClass *) klass;
-	
+        object_class = (GObjectClass *) klass;
         parent_class = g_type_class_peek_parent (klass);
 	
-	object_class->destroy = book_tree_destroy;
+	object_class->finalize = book_tree_finalize;
 	
         signals[LINK_SELECTED] =
                 g_signal_new ("link_selected",
-			      G_TYPE_FROM_CLASS (object_class),
+			      G_TYPE_FROM_CLASS (klass),
 			      G_SIGNAL_RUN_LAST,
 			      G_STRUCT_OFFSET (DhBookTreeClass,
 					       link_selected),
@@ -160,7 +157,7 @@ book_tree_init (DhBookTree *tree)
 }
 
 static void
-book_tree_destroy (GtkObject *object)
+book_tree_finalize (GObject *object)
 {
 	DhBookTree     *tree;
 	DhBookTreePriv *priv;

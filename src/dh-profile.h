@@ -51,7 +51,7 @@ struct _DhProfileClass {
 GType        dh_profile_get_type       (void);
 DhProfile *  dh_profile_new            (void);
 GNode *      dh_profile_open           (DhProfile     *profile,
-					GSList       **keywords,
+					GList        **keywords,
 					GError       **error);
 GSList *     dh_profiles_init          (void);
 

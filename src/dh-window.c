@@ -37,6 +37,7 @@
 #include "dh-book-tree.h"
 #include "dh-history.h"
 #include "dh-html.h"
+#include "dh-search.h"
 #include "dh-window.h"
 
 
@@ -211,7 +212,7 @@ window_populate (DhWindow *window)
 	GtkWidget    *frame;
 	GtkWidget    *book_tree_sw;
 	GNode        *contents_tree;
-	GSList       *keywords;
+	GList        *keywords = NULL;
 	GError       *error = NULL;
 	 
         g_return_if_fail (window != NULL);
@@ -268,6 +269,17 @@ window_populate (DhWindow *window)
 				  window);
 	}
 	
+	if (keywords) {
+		priv->search = dh_search_new (keywords);
+		
+		gtk_notebook_append_page (GTK_NOTEBOOK (priv->notebook),
+					  priv->search,
+					  gtk_label_new_with_mnemonic (_("_Search")));
+
+		g_signal_connect (priv->search, "link_selected",
+				  G_CALLBACK (window_link_selected_cb),
+				  window);
+	}
 
 #if 0
 	gtk_box_pack_start (GTK_BOX (priv->search_box), 
