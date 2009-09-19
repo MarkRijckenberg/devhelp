@@ -39,7 +39,6 @@
 #include "dh-preferences.h"
 #include "dh-assistant.h"
 #include "dh-util.h"
-#include "ige-conf.h"
 #include "dh-base.h"
 #include "dh-book-manager.h"
 
@@ -94,13 +93,6 @@ static void
 dh_base_init (DhBase *base)
 {
         DhBasePriv *priv = GET_PRIVATE (base);
-        IgeConf    *conf;
-        gchar      *path;
-
-        conf = ige_conf_get ();
-        path = dh_util_build_data_filename ("devhelp", "devhelp.defaults", NULL);
-        ige_conf_add_defaults (conf, path);
-        g_free (path);
 
         priv->book_manager = dh_book_manager_new ();
         dh_book_manager_populate (priv->book_manager);

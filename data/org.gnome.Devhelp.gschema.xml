@@ -1,0 +1,105 @@
+<schemalist>
+  <schema id='org.gnome.Devhelp' path='/apps/devhelp/'>
+    <child name='state' schema='org.gnome.Devhelp.state'/>
+    <child name='ui' schema='org.gnome.Devhelp.ui'/>
+  </schema>
+
+  <schema id='org.gnome.Devhelp.state'>
+    <child name='assistant' schema='org.gnome.Devhelp.AssistantState'/>
+    <child name='main' schema='org.gnome.Devhelp.MainState'/>
+  </schema>
+
+  <schema id='org.gnome.Devhelp.WindowState'>
+    <key name='maximized' type='b'>
+      <summary>If the window is maximized</summary>
+      <description>
+        TRUE if the window is maximized.  Otherwise, the size and
+        position of the window are determined by the size and position
+        keys.
+      </description>
+      <default>false</default>
+    </key>
+
+    <key name='size' type='(ii)'>
+      <summary>The size of the window</summary>
+      <description>
+        The size of the window, if not maximized.  (0, 0) indicates no
+        specific initial size.
+      </description>
+      <default>(0, 0)</default>
+    </key>
+
+    <key name='position' type='(ii)'>
+      <summary>The initial position of the window</summary>
+      <description>
+        The initial position of the window, if not maximized.  (-1, -1)
+        specifies no specific initial position (ie: allow the window
+        maanger to decide).
+      </description>
+      <default>(-1, -1)</default>
+    </key>
+  </schema>
+
+  <schema id='org.gnome.Devhelp.AssistantState'
+          extends='org.gnome.Devhelp.WindowState'>
+    <override name='size'>(350, 400)</override>
+  </schema>
+
+  <schema id='org.gnome.Devhelp.MainState'
+          extends='org.gnome.Devhelp.WindowState'>
+    <override name='size'>(700, 500)</override>
+
+    <key name='selected-tab' type='s'>
+      <summary>The selected tab</summary>
+      <description>
+        The initially selected tab in the sidebar of the main window.
+      </description>
+      <choices>
+        <choice value='content'/>
+        <choice value='search'/>
+      </choices>
+      <default>'content'</default>
+    </key>
+
+    <key name='paned-position' type='i'>
+      <summary>The position of the pane divider</summary>
+      <description>
+        The position of the pane divider.  This is how many pixels are
+        allocated to the search/contents notebook sidebar.
+      </description>
+      <default>250</default>
+    </key>
+  </schema>
+
+  <schema id='org.gnome.Devhelp.ui'>
+    <key name='fixed-font' type='s'>
+      <summary>The monospace font to use</summary>
+      <description>
+        The monospace font used by devhelp when displaying documentation.
+      </description>
+      <default>'Monospace 12'</default>
+    </key>
+
+    <key name='variable-font' type='s'>
+      <summary>The variable-width font to use</summary>
+      <description>
+        The variable width font used by devhelp when displaying
+        documentation.  This does not impact the Gtk UI of devhelp.
+      </description>
+      <default>'Sans 12'</default>
+    </key>
+
+    <key name='use-system-fonts' type='b'>
+      <summary>If devhelp should use system fonts</summary>
+      <description>
+        If this is set to TRUE then Devhelp will use the system fonts
+        for rendering the documentation.
+
+        If this is set to FALSE then Devhelp will use the fonts
+        specified here.
+      </description>
+      <default>false</default>
+    </key>
+  </schema>
+
+</schemalist>

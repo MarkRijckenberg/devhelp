@@ -46,7 +46,6 @@
 #include "dh-marshal.h"
 #include "dh-enum-types.h"
 #include "eggfindbar.h"
-#include "ige-conf.h"
 
 #define FULLSCREEN_ANIMATION_SPEED 4
 
@@ -1942,11 +1941,10 @@ dh_window_new (DhBase *base)
 
         gtk_window_set_icon_name (GTK_WINDOW (window), "devhelp");
 
-        dh_util_state_manage_window (GTK_WINDOW (window), "main/window");
-        dh_util_state_manage_paned (GTK_PANED (priv->hpaned), "main/paned");
+        dh_util_state_manage_window (GTK_WINDOW (window), "main");
+        dh_util_state_manage_paned (GTK_PANED (priv->hpaned), "main");
         dh_util_state_manage_notebook (GTK_NOTEBOOK (priv->control_notebook),
-                                       "main/search_notebook",
-                                       "content");
+                                       "main");
 
         return GTK_WIDGET (window);
 }

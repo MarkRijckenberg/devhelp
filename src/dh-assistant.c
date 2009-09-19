@@ -91,8 +91,7 @@ dh_assistant_init (DhAssistant *assistant)
         gtk_box_pack_start (GTK_BOX (priv->main_box),
                             scrolled_window, TRUE, TRUE, 0);
 
-        dh_util_state_manage_window (GTK_WINDOW (assistant),
-                                     "assistant/window");
+        dh_util_state_manage_window (GTK_WINDOW (assistant), "assistant");
 }
 
 GtkWidget *

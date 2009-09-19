@@ -26,9 +26,13 @@
 #ifdef GDK_WINDOWING_QUARTZ
 #include <CoreFoundation/CoreFoundation.h>
 #endif
-#include "ige-conf.h"
 #include "dh-util.h"
 
+#ifndef GDK_WINDOWING_QUARTZ
+static GSettings *desktop_settings;
+#endif
+static GSettings *state_settings;
+static GSettings *ui_settings;
 static GList *views;
 
 static GtkBuilder *
@@ -222,15 +226,53 @@ dh_util_build_data_filename (const gchar *first_part,
         return ret;
 }
 
+static void font_notify_cb (void);
+static void
+dh_util_settings_init (void)
+{
+        GSettings *toplevel;
+
+        /* just once */
+        if (ui_settings != NULL) {
+                return;
+        }
+
+        toplevel = g_settings_new ("org.gnome.Devhelp");
+        ui_settings = g_settings_get_child (toplevel, "ui");
+        g_signal_connect (ui_settings, "changed", font_notify_cb, NULL);
+        state_settings = g_settings_get_child (toplevel, "state");
+        g_object_unref (toplevel);
+
+#ifndef GDK_WINDOWING_QUARTZ
+        desktop_settings = g_settings_new ("org.gnome.Desktop.Interface");
+        g_signal_connect (desktop_settings, "changed", font_notify_cb, NULL);
+#endif
+}
+
+static GSettings *
+util_get_settings_for_widget (const gchar *component,
+                              const gchar *widget)
+{
+  GSettings *component_settings, *widget_settings;
+
+  dh_util_settings_init ();
+
+  component_settings = g_settings_get_child (state_settings, component);
+  widget_settings = g_settings_get_child (component_settings, widget);
+  g_object_unref (component_settings);
+
+  return widget_settings;
+}
+
 typedef struct {
-        gchar *name;
+        GSettings *settings;
         guint  timeout_id;
 } DhUtilStateItem;
 
 static void
 util_state_item_free (DhUtilStateItem *item)
 {
-        g_free (item->name);
+        g_object_unref (item->settings);
         if (item->timeout_id) {
                 g_source_remove (item->timeout_id);
         }
@@ -238,25 +280,18 @@ util_state_item_free (DhUtilStateItem *item)
 }
 
 static void
-util_state_setup_widget (GtkWidget   *widget,
-                         const gchar *name)
+util_state_setup_widget (GtkWidget *widget,
+                         GSettings *settings)
 {
         DhUtilStateItem *item;
 
         item = g_slice_new0 (DhUtilStateItem);
-        item->name = g_strdup (name);
+        item->settings = g_object_ref (settings);
 
         g_object_set_data_full (G_OBJECT (widget),
                                 "dh-util-state",
                                 item,
                                 (GDestroyNotify) util_state_item_free);
-}
-
-static gchar *
-util_state_get_key (const gchar *name,
-                    const gchar *key)
-{
-        return g_strdup_printf ("/apps/devhelp/state/%s/%s", name, key);
 }
 
 static void
@@ -277,10 +312,9 @@ util_state_schedule_save (GtkWidget   *widget,
 }
 
 static void
-util_state_save_window (GtkWindow   *window,
-                        const gchar *name)
+util_state_save_window (GtkWindow  *window,
+                        GSettings  *settings)
 {
-        gchar          *key;
         GdkWindowState  state;
         gboolean        maximized;
         gint            width, height;
@@ -291,15 +325,14 @@ util_state_save_window (GtkWindow   *window,
 #else
         state = gdk_window_get_state (GTK_WIDGET (window)->window);
 #endif
+
         if (state & GDK_WINDOW_STATE_MAXIMIZED) {
                 maximized = TRUE;
         } else {
                 maximized = FALSE;
         }
 
-        key = util_state_get_key (name, "maximized");
-        ige_conf_set_bool (ige_conf_get (), key, maximized);
-        g_free (key);
+        g_settings_set (settings, "maximized", "b", maximized);
 
         /* If maximized don't save the size and position. */
         if (maximized) {
@@ -307,52 +340,25 @@ util_state_save_window (GtkWindow   *window,
         }
 
         gtk_window_get_size (GTK_WINDOW (window), &width, &height);
-
-        key = util_state_get_key (name, "width");
-        ige_conf_set_int (ige_conf_get (), key, width);
-        g_free (key);
-
-        key = util_state_get_key (name, "height");
-        ige_conf_set_int (ige_conf_get (), key, height);
-        g_free (key);
+        g_settings_set (settings, "size", "(ii)", width, height);
 
         gtk_window_get_position (GTK_WINDOW (window), &x, &y);
-
-        key = util_state_get_key (name, "x_position");
-        ige_conf_set_int (ige_conf_get (), key, x);
-        g_free (key);
-
-        key = util_state_get_key (name, "y_position");
-        ige_conf_set_int (ige_conf_get (), key, y);
-        g_free (key);
+        g_settings_set (settings, "position", "(ii)", x, y);
 }
 
 static void
 util_state_restore_window (GtkWindow   *window,
-                           const gchar *name)
+                           GSettings   *settings)
 {
-        gchar     *key;
         gboolean   maximized;
         gint       width, height;
         gint       x, y;
         GdkScreen *screen;
         gint       max_width, max_height;
 
-        key = util_state_get_key (name, "width");
-        ige_conf_get_int (ige_conf_get (), key, &width);
-        g_free (key);
-
-        key = util_state_get_key (name, "height");
-        ige_conf_get_int (ige_conf_get (), key, &height);
-        g_free (key);
-
-        key = util_state_get_key (name, "x_position");
-        ige_conf_get_int (ige_conf_get (), key, &x);
-        g_free (key);
-
-        key = util_state_get_key (name, "y_position");
-        ige_conf_get_int (ige_conf_get (), key, &y);
-        g_free (key);
+        g_settings_get (settings, "maximized", "b", &maximized);
+        g_settings_get (settings, "size", "(ii)", &width, &height);
+        g_settings_get (settings, "position", "(ii)", &x, &y);
 
         if (width > 1 && height > 1) {
                 screen = gtk_widget_get_screen (GTK_WIDGET (window));
@@ -370,10 +376,6 @@ util_state_restore_window (GtkWindow   *window,
 
         gtk_window_move (window, x, y);
 
-        key = util_state_get_key (name, "maximized");
-        ige_conf_get_bool (ige_conf_get (), key, &maximized);
-        g_free (key);
-
         if (maximized) {
                 gtk_window_maximize (window);
         }
@@ -387,7 +389,7 @@ util_state_window_timeout_cb (gpointer window)
         item = g_object_get_data (window, "dh-util-state");
         if (item) {
                 item->timeout_id = 0;
-                util_state_save_window (window, item->name);
+                util_state_save_window (window, item->settings);
         }
 
 	return FALSE;
@@ -409,15 +411,10 @@ util_state_paned_timeout_cb (gpointer paned)
 
         item = g_object_get_data (paned, "dh-util-state");
         if (item) {
-                gchar *key;
-
                 item->timeout_id = 0;
 
-                key = util_state_get_key (item->name, "position");
-                ige_conf_set_int (ige_conf_get (),
-                                  key,
-                                  gtk_paned_get_position (paned));
-                g_free (key);
+                g_settings_set (item->settings, "position", "i",
+                                gtk_paned_get_position (paned));
         }
 
 	return FALSE;
@@ -433,31 +430,33 @@ util_state_paned_changed_cb (GtkWidget *paned,
 
 void
 dh_util_state_manage_window (GtkWindow   *window,
-                             const gchar *name)
+                             const gchar *component)
 {
-        util_state_setup_widget (GTK_WIDGET (window), name);
+        GSettings *settings;
+
+        settings = util_get_settings_for_widget (component, "window");
+
+        util_state_setup_widget (GTK_WIDGET (window), settings);
 
         g_signal_connect (window, "configure-event",
                           G_CALLBACK (util_state_window_configure_event_cb),
                           NULL);
 
-        util_state_restore_window (window, name);
+        util_state_restore_window (window, settings);
 }
 
 void
 dh_util_state_manage_paned (GtkPaned    *paned,
-                            const gchar *name)
+                            const gchar *component)
 {
-        gchar *key;
-        gint   position;
+        GSettings *settings;
+        gint       position;
 
-        util_state_setup_widget (GTK_WIDGET (paned), name);
+        settings = util_get_settings_for_widget (component, "paned");
 
-        key = util_state_get_key (name, "position");
-        if (ige_conf_get_int (ige_conf_get (), key, &position)) {
-                gtk_paned_set_position (paned, position);
-        }
-        g_free (key);
+        util_state_setup_widget (GTK_WIDGET (paned), settings);
+        g_settings_get (settings, "position", "i", &position);
+        gtk_paned_set_position (paned, position);
 
         g_signal_connect (paned, "notify::position",
                           G_CALLBACK (util_state_paned_changed_cb),
@@ -504,11 +503,7 @@ util_state_notebook_timeout_cb (gpointer notebook)
                         gtk_notebook_get_current_page (notebook));
                 page_name = dh_util_state_get_notebook_page_name (page);
                 if (page_name) {
-                        gchar *key;
-
-                        key = util_state_get_key (item->name, "selected_tab");
-                        ige_conf_set_string (ige_conf_get (), key, page_name);
-                        g_free (key);
+                        g_settings_set (item->settings, "selected_tab", "s", page_name);
                 }
         }
 
@@ -543,20 +538,17 @@ dh_util_state_get_notebook_page_name (GtkWidget *page)
 
 void
 dh_util_state_manage_notebook (GtkNotebook *notebook,
-                               const gchar *name,
-                               const gchar *default_tab)
+                               const gchar *component)
 {
-        gchar     *key;
+        GSettings *settings;
         gchar     *tab;
         gint       i;
 
-        util_state_setup_widget (GTK_WIDGET (notebook), name);
+        settings = util_get_settings_for_widget (component,
+                                                 "search_notebook");
 
-        key = util_state_get_key (name, "selected_tab");
-        if (!ige_conf_get_string (ige_conf_get (), key, &tab)) {
-                tab = g_strdup (default_tab);
-        }
-        g_free (key);
+        util_state_setup_widget (GTK_WIDGET (notebook), settings);
+        g_settings_get (settings, "selected_tab", "s", &tab);
 
         for (i = 0; i < gtk_notebook_get_n_pages (notebook); i++) {
                 GtkWidget   *page;
@@ -604,35 +596,23 @@ split_font_string (const gchar  *name_and_size,
 	return retval;
 }
 
-#define DH_CONF_PATH                  "/apps/devhelp"
-#define DH_CONF_USE_SYSTEM_FONTS      DH_CONF_PATH "/ui/use_system_fonts"
-#define DH_CONF_VARIABLE_FONT         DH_CONF_PATH "/ui/variable_font"
-#define DH_CONF_FIXED_FONT            DH_CONF_PATH "/ui/fixed_font"
-#define DH_CONF_SYSTEM_VARIABLE_FONT  "/desktop/gnome/interface/font_name"
-#define DH_CONF_SYSTEM_FIXED_FONT     "/desktop/gnome/interface/monospace_font_name"
-
-void
+static void
 dh_util_font_get_variable (gchar    **name,
                            gdouble   *size,
                            gboolean   use_system_fonts)
 {
-	IgeConf *conf;
 	gchar   *name_and_size;
-
-	conf = ige_conf_get ();
 
 	if (use_system_fonts) {
 #ifdef GDK_WINDOWING_QUARTZ
                 name_and_size = g_strdup ("Lucida Grande 14");
 #else
-		ige_conf_get_string (conf,
-                                     DH_CONF_SYSTEM_VARIABLE_FONT,
-                                     &name_and_size);
+                g_settings_get (desktop_settings,
+                                "font_name", "s", &name_and_size);
 #endif
 	} else {
-		ige_conf_get_string (conf,
-                                     DH_CONF_VARIABLE_FONT,
-                                     &name_and_size);
+                g_settings_get (ui_settings,
+                                "variable_font", "s", &name_and_size);
 	}
 
         if (!split_font_string (name_and_size, name, size)) {
@@ -643,28 +623,22 @@ dh_util_font_get_variable (gchar    **name,
         g_free (name_and_size);
 }
 
-void
+static void
 dh_util_font_get_fixed (gchar    **name,
                         gdouble   *size,
                         gboolean   use_system_fonts)
 {
-	IgeConf *conf;
 	gchar   *name_and_size;
-
-	conf = ige_conf_get ();
 
 	if (use_system_fonts) {
 #ifdef GDK_WINDOWING_QUARTZ
                 name_and_size = g_strdup ("Monaco 14");
 #else
-		ige_conf_get_string (conf,
-                                     DH_CONF_SYSTEM_FIXED_FONT,
-                                     &name_and_size);
+                g_settings_get (desktop_settings,
+                                "monospace_font_name", "s", &name_and_size);
 #endif
 	} else {
-		ige_conf_get_string (conf,
-                                     DH_CONF_FIXED_FONT,
-                                     &name_and_size);
+                g_settings_get (ui_settings, "fixed_font", "s", &name_and_size);
 	}
 
         if (!split_font_string (name_and_size, name, size)) {
@@ -685,7 +659,6 @@ view_destroy_cb (GtkWidget *view,
 static void
 view_setup_fonts (WebKitWebView *view)
 {
-        IgeConf           *conf;
         WebKitWebSettings *settings;
         gboolean           use_system_fonts;
 	gchar             *variable_name;
@@ -693,13 +666,9 @@ view_setup_fonts (WebKitWebView *view)
 	gchar             *fixed_name;
 	gdouble            fixed_size;
 
-        conf = ige_conf_get ();
-
         settings = webkit_web_view_get_settings (WEBKIT_WEB_VIEW (view));
 
-	ige_conf_get_bool (conf,
-                           DH_CONF_USE_SYSTEM_FONTS,
-                           &use_system_fonts);
+        g_settings_get (ui_settings, "use_system_fonts", "b", &use_system_fonts);
 
         dh_util_font_get_variable (&variable_name, &variable_size,
                                    use_system_fonts);
@@ -719,9 +688,7 @@ view_setup_fonts (WebKitWebView *view)
 }
 
 static void
-font_notify_cb (IgeConf     *conf,
-                const gchar *path,
-                gpointer     user_data)
+font_notify_cb (void)
 {
         GList *l;
 
@@ -733,36 +700,7 @@ font_notify_cb (IgeConf     *conf,
 void
 dh_util_font_add_web_view (WebKitWebView *view)
 {
-        static gboolean setup;
-
-        if (!setup) {
-                IgeConf *conf;
-
-                conf = ige_conf_get ();
-
-		ige_conf_notify_add (conf,
-                                     DH_CONF_USE_SYSTEM_FONTS,
-                                     font_notify_cb,
-                                     NULL);
-		ige_conf_notify_add (conf,
-                                     DH_CONF_SYSTEM_VARIABLE_FONT,
-                                     font_notify_cb,
-                                     NULL);
-		ige_conf_notify_add (conf,
-                                     DH_CONF_SYSTEM_FIXED_FONT,
-                                     font_notify_cb,
-                                     NULL);
-		ige_conf_notify_add (conf,
-                                     DH_CONF_VARIABLE_FONT,
-                                     font_notify_cb,
-                                     NULL);
-		ige_conf_notify_add (conf,
-                                     DH_CONF_FIXED_FONT,
-                                     font_notify_cb,
-                                     NULL);
-
-                setup = TRUE;
-        }
+        dh_util_settings_init ();
 
         views = g_list_prepend (views, view);
 
@@ -810,3 +748,10 @@ dh_util_cmp_book (DhLink *a, DhLink *b)
         return rc;
 }
 
+GSettings *
+dh_util_get_ui_settings (void)
+{
+  dh_util_settings_init ();
+
+  return g_object_ref (ui_settings);
+}

@@ -40,27 +40,22 @@ void         dh_util_builder_connect              (GtkBuilder  *gui,
 gchar *      dh_util_build_data_filename          (const gchar *first_part,
                                                    ...);
 void         dh_util_state_manage_window          (GtkWindow   *window,
-                                                   const gchar *name);
+                                                   const gchar *component);
 void         dh_util_state_manage_paned           (GtkPaned    *paned,
-                                                   const gchar *name);
+                                                   const gchar *component);
 void         dh_util_state_manage_notebook        (GtkNotebook *notebook,
-                                                   const gchar *name,
-                                                   const gchar *default_tab);
+                                                   const gchar *component);
 void         dh_util_state_set_notebook_page_name (GtkWidget   *page,
                                                    const gchar *page_name);
 const gchar *dh_util_state_get_notebook_page_name (GtkWidget   *page);
 GSList *     dh_util_state_load_disabled_books    (void);
 void         dh_util_state_store_disabled_books   (GSList *disabled_books);
 
-void         dh_util_font_get_variable            (gchar        **name,
-                                                   gdouble       *size,
-                                                   gboolean       use_system_font);
-void         dh_util_font_get_fixed               (gchar        **name,
-                                                   gdouble       *size,
-                                                   gboolean       use_system_font);
 void         dh_util_font_add_web_view            (WebKitWebView *view);
 gint         dh_util_cmp_book                     (DhLink *a,
                                                    DhLink *b);
+
+GSettings *  dh_util_get_ui_settings              (void);
 
 G_END_DECLS
 

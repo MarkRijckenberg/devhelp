@@ -24,10 +24,10 @@
 #include <string.h>
 #include "dh-util.h"
 #include "dh-preferences.h"
-#include "ige-conf.h"
 #include "dh-base.h"
 
 typedef struct {
+        GSettings *settings;
 	GtkWidget *dialog;
 
         /* Fonts tab */
@@ -64,26 +64,6 @@ static void     preferences_fonts_use_system_font_notify_cb (IgeConf          *c
                                                              gpointer          user_data);
 static void     preferences_connect_conf_listeners          (void);
 #endif
-static void     preferences_fonts_get_font_names            (gboolean          use_system_fonts,
-                                                             gchar           **variable,
-                                                             gchar           **fixed);
-
-/* Bookshelf-tab related */
-static void     preferences_bookshelf_tree_selection_toggled_cb (GtkCellRendererToggle *cell_renderer,
-                                                                 gchar                 *path,
-                                                                 gpointer               user_data);
-static void     preferences_bookshelf_populate_store            (void);
-
-/* Common */
-static void     preferences_close_cb                        (GtkButton        *button,
-                                                             gpointer          user_data);
-
-#define DH_CONF_PATH                  "/apps/devhelp"
-#define DH_CONF_USE_SYSTEM_FONTS      DH_CONF_PATH "/ui/use_system_fonts"
-#define DH_CONF_VARIABLE_FONT         DH_CONF_PATH "/ui/variable_font"
-#define DH_CONF_FIXED_FONT            DH_CONF_PATH "/ui/fixed_font"
-#define DH_CONF_SYSTEM_VARIABLE_FONT  "/desktop/gnome/interface/font_name"
-#define DH_CONF_SYSTEM_FIXED_FONT     "/desktop/gnome/interface/monospace_font_name"
 
 /* Book list store columns... */
 #define LTCOLUMN_ENABLED  0
@@ -98,6 +78,7 @@ preferences_init (void)
 	if (!prefs) {
                 prefs = g_new0 (DhPreferences, 1);
                 prefs->book_manager  = dh_base_get_book_manager (dh_base_get ());
+                prefs->settings = dh_util_get_ui_settings ();
         }
 }
 
@@ -116,6 +97,12 @@ preferences_close_cb (GtkButton *button, gpointer user_data)
 
         prefs->booklist_treeview = NULL;
         prefs->booklist_store = NULL;
+
+	if (GTK_WIDGET (button) == prefs->variable_font_button) {
+                g_settings_set (prefs->settings, "variable_font", "s", font_name);
+	} else {
+                g_settings_set (prefs->settings, "fixed_font", "s", font_name);
+	}
 }
 
 static void
@@ -124,17 +111,14 @@ preferences_fonts_font_set_cb (GtkFontButton *button,
 {
 	DhPreferences *prefs = user_data;
 	const gchar   *font_name;
-	const gchar   *key;
 
 	font_name = gtk_font_button_get_font_name (button);
 
 	if (GTK_WIDGET (button) == prefs->variable_font_button) {
-		key = DH_CONF_VARIABLE_FONT;
+                g_settings_set (prefs->settings, "variable_font", font_name);
 	} else {
-		key = DH_CONF_FIXED_FONT;
+                g_settings_set (prefs->settings, "fixed_font", font_name);
 	}
-
-	ige_conf_set_string (ige_conf_get (), key, font_name);
 }
 
 static void
@@ -146,10 +130,7 @@ preferences_fonts_system_fonts_toggled_cb (GtkToggleButton *button,
 
 	active = gtk_toggle_button_get_active (button);
 
-	ige_conf_set_bool (ige_conf_get (),
-                           DH_CONF_USE_SYSTEM_FONTS,
-                           active);
-
+	g_settings_set (prefs->settings, "use_system_fonts", "b", active);
 	gtk_widget_set_sensitive (prefs->fonts_table, !active);
 }
 
@@ -254,97 +235,6 @@ preferences_connect_conf_listeners (void)
 }
 #endif
 
-/* FIXME: Use the functions in dh-util.c for this. */
-static void
-preferences_fonts_get_font_names (gboolean   use_system_fonts,
-                                  gchar    **variable,
-                                  gchar    **fixed)
-{
-	gchar   *var_font_name, *fixed_font_name;
-	IgeConf *conf;
-
-	conf = ige_conf_get ();
-
-	if (use_system_fonts) {
-#ifdef GDK_WINDOWING_QUARTZ
-                var_font_name = g_strdup ("Lucida Grande 14");
-                fixed_font_name = g_strdup ("Monaco 14");
-#else
-		ige_conf_get_string (conf,
-                                     DH_CONF_SYSTEM_VARIABLE_FONT,
-                                     &var_font_name);
-		ige_conf_get_string (conf,
-                                     DH_CONF_SYSTEM_FIXED_FONT,
-                                     &fixed_font_name);
-#endif
-	} else {
-		ige_conf_get_string (conf,
-                                     DH_CONF_VARIABLE_FONT,
-                                     &var_font_name);
-                ige_conf_get_string (conf,
-                                     DH_CONF_FIXED_FONT,
-                                     &fixed_font_name);
-	}
-
-	*variable = var_font_name;
-	*fixed = fixed_font_name;
-}
-
-static void
-preferences_bookshelf_tree_selection_toggled_cb (GtkCellRendererToggle *cell_renderer,
-                                                 gchar                 *path,
-                                                 gpointer               user_data)
-{
-        GtkTreeIter iter;
-
-        if (gtk_tree_model_get_iter_from_string (GTK_TREE_MODEL (prefs->booklist_store),
-                                                 &iter,
-                                                 path))
-        {
-                gpointer book = NULL;
-                gboolean enabled;
-
-                gtk_tree_model_get (GTK_TREE_MODEL (prefs->booklist_store),
-                                    &iter,
-                                    LTCOLUMN_BOOK,       &book,
-                                    LTCOLUMN_ENABLED,    &enabled,
-                                    -1);
-
-                if (book) {
-                        /* Update book conf */
-                        dh_book_set_enabled (book, !enabled);
-
-                        gtk_list_store_set (prefs->booklist_store, &iter,
-                                            LTCOLUMN_ENABLED, !enabled,
-                                            -1);
-
-                        dh_book_manager_update (prefs->book_manager);
-                }
-        }
-}
-
-static void
-preferences_bookshelf_populate_store (void)
-{
-        GList         *l;
-
-        for (l = dh_book_manager_get_books (prefs->book_manager);
-             l;
-             l = g_list_next (l)) {
-                GtkTreeIter  iter;
-                DhBook      *book;
-
-                book = DH_BOOK (l->data);
-
-                gtk_list_store_append (prefs->booklist_store, &iter);
-                gtk_list_store_set (prefs->booklist_store, &iter,
-                                    LTCOLUMN_ENABLED,  dh_book_get_enabled (book),
-                                    LTCOLUMN_TITLE,    dh_book_get_title (book),
-                                    LTCOLUMN_BOOK,     book,
-                                    -1);
-        }
-}
-
 void
 dh_preferences_show_dialog (GtkWindow *parent)
 {
@@ -387,14 +277,13 @@ dh_preferences_show_dialog (GtkWindow *parent)
                 "preferences_close_button", "clicked", preferences_close_cb,
                 NULL);
 
-	ige_conf_get_bool (ige_conf_get (),
-                           DH_CONF_USE_SYSTEM_FONTS,
-                           &use_system_fonts);
+        g_settings_get (prefs->settings, "use_system_fonts", "b", &use_system_fonts);
 	gtk_toggle_button_set_active (GTK_TOGGLE_BUTTON (prefs->system_fonts_button),
 				      use_system_fonts);
 	gtk_widget_set_sensitive (prefs->fonts_table, !use_system_fonts);
 
-	preferences_fonts_get_font_names (FALSE, &var_font_name, &fixed_font_name);
+	g_settings_get (prefs->settings, "variable_font", "s", &var_font_name);
+        g_settings_get (prefs->settings, "fixed_font", "s", &fixed_font_name);
 
 	if (var_font_name) {
 		gtk_font_button_set_font_name (GTK_FONT_BUTTON (prefs->variable_font_button),

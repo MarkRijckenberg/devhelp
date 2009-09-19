@@ -32,23 +32,21 @@ AM_PROG_CC_C_O
 IT_PROG_INTLTOOL([0.40.0])
 
 PKG_PROG_PKG_CONFIG
-AM_GCONF_SOURCE_2
 GNOME_COMPILE_WARNINGS
+GLIB_GSETTINGS
 
 dnl -----------------------------------------------------------
 dnl Platform (GTK+ X11 or GTK OS X)
 dnl -----------------------------------------------------------
 IGE_PLATFORM_CHECK
 if test "x$IGE_PLATFORM" = xx11; then
-   gconf_pkgconfig="gconf-2.0 >= 2.6.0"
-   libwnck_pkgconfig=
+   libwnck_pkgconfig="libwnck-1.0 >= 2.10.0"
    igemacintegration_pkgconfig=
    REQUIRES_LIBWNCK=
    PLATFORM_CFLAGS=
    PLATFORM_LDFLAGS=
    HAVE_WNCK=no
 else
-   gconf_pkgconfig=
    libwnck_pkgconfig=
    igemacintegration_pkgconfig="ige-mac-integration >= 0.8.2"
    REQUIRES_LIBWNCK=
@@ -56,7 +54,6 @@ else
    PLATFORM_LDFLAGS=
    HAVE_WNCK=no
 fi
-AM_CONDITIONAL(GCONF_SCHEMAS_INSTALL, test "x$IGE_PLATFORM" = xx11)
 AC_SUBST(PLATFORM_CFLAGS)
 AC_SUBST(PLATFORM_LDFLAGS)
 AC_SUBST(REQUIRES_LIBWNCK)
@@ -64,17 +61,17 @@ AC_SUBST(REQUIRES_LIBWNCK)
 PKG_CHECK_MODULES(DEVHELP, [
   gthread-2.0 >= 2.10.0
   gtk+-3.0
-  webkitgtk-3.0
-  unique-3.0
 ])
+  #webkitgtk-3.0
+  #unique-3.0
 
 PKG_CHECK_MODULES(LIBDEVHELP, [
   gtk+-3.0
   $gconf_pkgconfig
   $libwnck_pkgconfig
   $igemacintegration_pkgconfig
-  webkitgtk-3.0
 ])
+  #webkitgtk-3.0
 
 if test "x$HAVE_WNCK" = "xyes" ; then
     AC_DEFINE(HAVE_WNCK, 1, [Defined if libwnck is available])
