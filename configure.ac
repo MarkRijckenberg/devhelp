@@ -60,7 +60,7 @@ AM_CONDITIONAL(GCONF_SCHEMAS_INSTALL, test "x$IGE_PLATFORM" = xx11)
 PKG_CHECK_MODULES(DEVHELP, [
   gthread-2.0 >= 2.10.0
   gtk+-3.0 >= 3.0.2
-  webkitgtk-3.0
+  webkit2gtk-3.0
   glib-2.0 >= 2.25.11
 ])
 
@@ -68,7 +68,7 @@ PKG_CHECK_MODULES(LIBDEVHELP, [
   gtk+-3.0 >= 3.0.2
   $gconf_pkgconfig
   $gtkmacintegration_pkgconfig
-  webkitgtk-3.0
+  webkit2gtk-3.0
 ])
 
 AC_ARG_WITH(zlib, [  --with-zlib=DIR         use zlib in DIR], zlibdir=$with_zlib)

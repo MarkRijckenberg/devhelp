@@ -23,7 +23,7 @@
 #define __DH_UTIL_H__
 
 #include <gtk/gtk.h>
-#include <webkit/webkit.h>
+#include <webkit2/webkit2.h>
 #include "dh-link.h"
 
 G_BEGIN_DECLS

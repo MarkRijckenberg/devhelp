@@ -21,7 +21,7 @@
 #ifndef __DH_ASSISTANT_VIEW_H__
 #define __DH_ASSISTANT_VIEW_H__
 
-#include <webkit/webkit.h>
+#include <webkit2/webkit2.h>
 #include "dh-base.h"
 #include "dh-link.h"
 
