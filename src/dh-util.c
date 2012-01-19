@@ -669,14 +669,13 @@ view_destroy_cb (GtkWidget *view,
 static void
 view_setup_fonts (WebKitWebView *view)
 {
-#if 0 /* WebKit Settings */
-        IgeConf           *conf;
-        WebKitWebSettings *settings;
-        gboolean           use_system_fonts;
-	gchar             *variable_name;
-	gdouble            variable_size;
-	gchar             *fixed_name;
-	gdouble            fixed_size;
+        IgeConf        *conf;
+        WebKitSettings *settings;
+        gboolean        use_system_fonts;
+	gchar          *variable_name;
+	gdouble         variable_size;
+	gchar          *fixed_name;
+	gdouble         fixed_size;
 
         conf = ige_conf_get ();
 
@@ -701,7 +700,6 @@ view_setup_fonts (WebKitWebView *view)
 
         g_free (variable_name);
         g_free (fixed_name);
-#endif
 }
 
 static void
