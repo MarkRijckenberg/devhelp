@@ -155,6 +155,7 @@ static void           window_tab_set_title           (DhWindow        *window,
                                                       const gchar     *title);
 static void           window_close_tab               (DhWindow *window,
                                                       gint      page_num);
+static void           do_search                      (DhWindow *window);
 
 G_DEFINE_TYPE (DhWindow, dh_window, GTK_TYPE_WINDOW);
 
@@ -268,18 +269,16 @@ static void
 window_activate_find (GtkAction *action,
                       DhWindow  *window)
 {
-#if 0 /* Find API: https://bugs.webkit.org/show_bug.cgi?id=76070 */
         DhWindowPriv  *priv;
-        WebKitWebView *web_view;
 
         priv = window->priv;
-        web_view = window_get_active_web_view (window);
-
         gtk_widget_show (priv->findbar);
         gtk_widget_grab_focus (priv->findbar);
 
-        webkit_web_view_set_highlight_text_matches (web_view, TRUE);
-#endif
+        /* The old behaviour was to re-enable highlighting without
+           starting a new search. Current API does not allow that
+           without invoking a new search. */
+        do_search (window);
 }
 
 static int
@@ -1453,29 +1452,29 @@ window_web_view_button_press_event_cb (WebKitWebView  *web_view,
         return FALSE;
 }
 
-static gboolean
+static void
 do_search (DhWindow *window)
 {
-#if 0 /* Find API: https://bugs.webkit.org/show_bug.cgi?id=76070 */
         DhWindowPriv  *priv = window->priv;
-        WebKitWebView *web_view;
+        WebKitFindController *find_controller;
+        guint find_options = WEBKIT_FIND_OPTIONS_WRAP_AROUND;
+        const gchar *search_text;
 
+        find_controller = webkit_web_view_get_find_controller (window_get_active_web_view (window));
+        if (!egg_find_bar_get_case_sensitive (EGG_FIND_BAR (priv->findbar)))
+            find_options |= WEBKIT_FIND_OPTIONS_CASE_INSENSITIVE;
+
+        search_text = egg_find_bar_get_search_string (EGG_FIND_BAR (priv->findbar));
+        webkit_find_controller_search (find_controller, search_text, find_options, G_MAXUINT);
+}
+
+static gboolean
+search_timeout_cb (DhWindow *window)
+{
+        DhWindowPriv  *priv = window->priv;
         priv->find_source_id = 0;
 
-        web_view = window_get_active_web_view (window);
-
-        webkit_web_view_unmark_text_matches (web_view);
-        webkit_web_view_mark_text_matches (
-                web_view,
-                egg_find_bar_get_search_string (EGG_FIND_BAR (priv->findbar)),
-                egg_find_bar_get_case_sensitive (EGG_FIND_BAR (priv->findbar)), 0);
-        webkit_web_view_set_highlight_text_matches (web_view, TRUE);
-
-        webkit_web_view_search_text (
-                web_view, egg_find_bar_get_search_string (EGG_FIND_BAR (priv->findbar)),
-                egg_find_bar_get_case_sensitive (EGG_FIND_BAR (priv->findbar)),
-                TRUE, TRUE);
-#endif
+        do_search (window);
 
 	return FALSE;
 }
@@ -1492,7 +1491,7 @@ window_find_search_changed_cb (GObject    *object,
                 priv->find_source_id = 0;
         }
 
-        priv->find_source_id = g_timeout_add (300, (GSourceFunc)do_search, window);
+        priv->find_source_id = g_timeout_add (300, (GSourceFunc)search_timeout_cb, window);
 }
 
 static void
@@ -1500,60 +1499,48 @@ window_find_case_changed_cb (GObject    *object,
                              GParamSpec *pspec,
                              DhWindow   *window)
 {
-        DhWindowPriv  *priv = window->priv;;
-        WebKitWebView *view;
+        do_search (window);
+}
+
+static void
+window_find_next_or_previous (DhWindow *window,
+                              gboolean  next)
+{
+        DhWindowPriv  *priv = window->priv;
         const gchar   *string;
         gboolean       case_sensitive;
+        gboolean       same_options;
+        WebKitFindController *find_controller;
 
-        view = window_get_active_web_view (window);
+        gtk_widget_show (priv->findbar);
 
-        string = egg_find_bar_get_search_string (EGG_FIND_BAR (priv->findbar));
         case_sensitive = egg_find_bar_get_case_sensitive (EGG_FIND_BAR (priv->findbar));
-#if 0 /* Find API: https://bugs.webkit.org/show_bug.cgi?id=76070 */
-        webkit_web_view_unmark_text_matches (view);
-        webkit_web_view_mark_text_matches (view, string, case_sensitive, 0);
-        webkit_web_view_set_highlight_text_matches (view, TRUE);
-#endif
+        string = egg_find_bar_get_search_string (EGG_FIND_BAR (priv->findbar));
+        find_controller = webkit_web_view_get_find_controller(window_get_active_web_view (window));
+
+        same_options = (webkit_find_controller_get_options(find_controller) &
+                        WEBKIT_FIND_OPTIONS_CASE_INSENSITIVE) == !case_sensitive;
+        if (!g_strcmp0(string, webkit_find_controller_get_search_text(find_controller)) && same_options)
+                if (next)
+                        webkit_find_controller_search_next(find_controller);
+                else
+                        webkit_find_controller_search_previous(find_controller);
+        else
+                do_search (window);
 }
 
 static void
 window_find_next_cb (GtkEntry *entry,
                      DhWindow *window)
 {
-        DhWindowPriv  *priv = window->priv;
-        WebKitWebView *view;
-        const gchar   *string;
-        gboolean       case_sensitive;
-
-        view = window_get_active_web_view (window);
-
-        gtk_widget_show (priv->findbar);
-
-        string = egg_find_bar_get_search_string (EGG_FIND_BAR (priv->findbar));
-        case_sensitive = egg_find_bar_get_case_sensitive (EGG_FIND_BAR (priv->findbar));
-#if 0 /* Find API: https://bugs.webkit.org/show_bug.cgi?id=76070 */
-        webkit_web_view_search_text (view, string, case_sensitive, TRUE, TRUE);
-#endif
+        window_find_next_or_previous (window, TRUE);
 }
 
 static void
 window_find_previous_cb (GtkEntry *entry,
                          DhWindow *window)
 {
-        DhWindowPriv  *priv = window->priv;
-        WebKitWebView *view;
-        const gchar   *string;
-        gboolean       case_sensitive;
-
-        view = window_get_active_web_view (window);
-
-        gtk_widget_show (priv->findbar);
-
-        string = egg_find_bar_get_search_string (EGG_FIND_BAR (priv->findbar));
-        case_sensitive = egg_find_bar_get_case_sensitive (EGG_FIND_BAR (priv->findbar));
-#if 0 /* Find API: https://bugs.webkit.org/show_bug.cgi?id=76070 */
-        webkit_web_view_search_text (view, string, case_sensitive, FALSE, TRUE);
-#endif
+        window_find_next_or_previous (window, FALSE);
 }
 
 static void
@@ -1562,13 +1549,14 @@ window_findbar_close_cb (GtkWidget *widget,
 {
         DhWindowPriv  *priv = window->priv;
         WebKitWebView *view;
+        WebKitFindController *find_controller;
 
         view = window_get_active_web_view (window);
+        find_controller = webkit_web_view_get_find_controller (window_get_active_web_view (window));
 
         gtk_widget_hide (priv->findbar);
-#if 0 /* Find API: https://bugs.webkit.org/show_bug.cgi?id=76070 */
-        webkit_web_view_set_highlight_text_matches (view, FALSE);
-#endif
+
+        webkit_find_controller_search_finish (find_controller);
 }
 
 #if 0
