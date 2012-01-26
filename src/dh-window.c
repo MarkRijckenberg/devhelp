@@ -287,7 +287,7 @@ static int
 window_get_current_zoom_level_index (DhWindow *window)
 {
         WebKitWebView *web_view;
-        float zoom_level;
+        double zoom_level;
         int zoom_level_as_int = ZOOM_DEFAULT;
         int i;
 
@@ -341,7 +341,7 @@ window_activate_zoom_in (GtkAction *action,
 
                 web_view = window_get_active_web_view (window);
                 g_object_set (web_view,
-                              "zoom-level", (float)(zoom_levels[zoom_level_idx+1].level)/100,
+                              "zoom-level", (double)(zoom_levels[zoom_level_idx+1].level)/100,
                               NULL);
                 window_update_zoom_actions_sensitiveness (window);
         }
@@ -363,7 +363,7 @@ window_activate_zoom_out (GtkAction *action,
 
                 web_view = window_get_active_web_view (window);
                 g_object_set (web_view,
-                              "zoom-level", (float)(zoom_levels[zoom_level_idx-1].level)/100,
+                              "zoom-level", (double)(zoom_levels[zoom_level_idx-1].level)/100,
                               NULL);
                 window_update_zoom_actions_sensitiveness (window);
         }
@@ -379,7 +379,7 @@ window_activate_zoom_default (GtkAction *action,
         priv = window->priv;
 
         web_view = window_get_active_web_view (window);
-        g_object_set (web_view, "zoom-level", (float)(ZOOM_DEFAULT)/100, NULL);
+        g_object_set (web_view, "zoom-level", (double)(ZOOM_DEFAULT)/100, NULL);
         window_update_zoom_actions_sensitiveness (window);
 }
 
