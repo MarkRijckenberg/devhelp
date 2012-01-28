@@ -1276,39 +1276,42 @@ find_library_equivalent (DhWindow    *window,
         return local_uri;
 }
 
-#if 0 /* Policy Client */
 static gboolean
-window_web_view_navigation_policy_decision_requested (WebKitWebView             *web_view,
-                                                      WebKitWebFrame            *frame,
-                                                      WebKitNetworkRequest      *request,
-                                                      WebKitWebNavigationAction *navigation_action,
-                                                      WebKitWebPolicyDecision   *policy_decision,
-                                                      DhWindow                  *window)
+window_web_view_decide_policy_cb (WebKitWebView           *web_view,
+                                  WebKitPolicyDecision    *abstract_decision,
+                                  WebKitPolicyDecisionType type,
+                                  DhWindow                *window)
 {
-        DhWindowPriv *priv;
-        const char   *uri;
+        DhWindowPriv                   *priv;
+        const char                     *uri;
+        WebKitNavigationPolicyDecision *decision;
 
         priv = window->priv;
 
-        uri = webkit_network_request_get_uri (request);
+        if (type != WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION) {
+                return FALSE;
+        }
+
+        decision = WEBKIT_NAVIGATION_POLICY_DECISION (abstract_decision);
+        uri = webkit_uri_request_get_uri (webkit_navigation_policy_decision_get_request (decision));
 
         /* make sure to hide the info bar on page change */
         gtk_widget_hide (window_get_active_info_bar (window));
 
-        if (webkit_web_navigation_action_get_button (navigation_action) == 2) { /* middle click */
-                webkit_web_policy_decision_ignore (policy_decision);
+        if (webkit_navigation_policy_decision_get_mouse_button (decision) == 2) { /* middle click */
+                webkit_policy_decision_ignore (abstract_decision);
                 g_signal_emit (window, signals[OPEN_LINK], 0, uri, DH_OPEN_LINK_NEW_TAB);
                 return TRUE;
         }
 
-        if (strcmp (uri, "about:blank") == 0) {
+        if (g_str_equal (uri, "about:blank")) {
                 return FALSE;
         }
 
         if (strncmp (uri, "http://library.gnome.org/devel/", 31) == 0) {
                 gchar *local_uri = find_library_equivalent (window, uri);
                 if (local_uri) {
-                        webkit_web_policy_decision_ignore (policy_decision);
+                        webkit_policy_decision_ignore (abstract_decision);
                         _dh_window_display_uri (window, local_uri);
                         g_free (local_uri);
                         return TRUE;
@@ -1316,7 +1319,7 @@ window_web_view_navigation_policy_decision_requested (WebKitWebView             
         }
 
         if (strncmp (uri, "file://", 7) != 0) {
-                webkit_web_policy_decision_ignore (policy_decision);
+                webkit_policy_decision_ignore (abstract_decision);
                 gtk_show_uri (NULL, uri, GDK_CURRENT_TIME, NULL);
                 return TRUE;
         }
@@ -1328,7 +1331,6 @@ window_web_view_navigation_policy_decision_requested (WebKitWebView             
 
         return FALSE;
 }
-#endif
 
 static gboolean
 window_web_view_load_failed_cb (WebKitWebView   *web_view,
@@ -1667,11 +1669,9 @@ window_open_new_tab (DhWindow    *window,
         g_signal_connect (view, "button-press-event",
                           G_CALLBACK (window_web_view_button_press_event_cb),
                           window);
-#if 0 /* Policy Client */
-        g_signal_connect (view, "navigation-policy-decision-requested",
-                          G_CALLBACK (window_web_view_navigation_policy_decision_requested),
+        g_signal_connect (view, "decide-policy",
+                          G_CALLBACK (window_web_view_decide_policy_cb),
                           window);
-#endif
         g_signal_connect (view, "load-failed",
                           G_CALLBACK (window_web_view_load_failed_cb),
                           window);
