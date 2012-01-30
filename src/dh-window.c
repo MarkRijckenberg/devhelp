@@ -1304,7 +1304,7 @@ window_web_view_decide_policy_cb (WebKitWebView           *web_view,
                 return TRUE;
         }
 
-        if (g_str_equal (uri, "about:blank")) {
+        if (strcmp (uri, "about:blank") == 0) {
                 return FALSE;
         }
 
