@@ -59,24 +59,43 @@ view_finalize (GObject *object)
         G_OBJECT_CLASS (dh_assistant_view_parent_class)->finalize (object);
 }
 
-#if 0 /* Policy Client */
-static WebKitNavigationResponse
-assistant_navigation_requested (WebKitWebView        *web_view,
-                                WebKitWebFrame       *frame,
-                                WebKitNetworkRequest *request)
+static gboolean
+assistant_decide_policy (WebKitWebView           *web_view,
+                         WebKitPolicyDecision    *decision,
+                         WebKitPolicyDecisionType decision_type)
 {
-        DhAssistantViewPriv *priv;
-        const gchar         *uri;
+        DhAssistantViewPriv            *priv;
+        const gchar                    *uri;
+        WebKitNavigationPolicyDecision *navigation_decision;
+        WebKitNavigationType            navigation_type;
+        WebKitURIRequest               *request;
+
+        if (decision_type != WEBKIT_POLICY_DECISION_TYPE_NAVIGATION_ACTION) {
+                webkit_policy_decision_ignore (decision);
+
+                return TRUE;
+        }
 
         priv = GET_PRIVATE (web_view);
+        navigation_decision = WEBKIT_NAVIGATION_POLICY_DECISION (decision);
+        navigation_type = webkit_navigation_policy_decision_get_navigation_type (navigation_decision);
+        if (navigation_type != WEBKIT_NAVIGATION_TYPE_LINK_CLICKED) {
+                if (! priv->snippet_loaded) {
+                        priv->snippet_loaded = TRUE;
+                        webkit_policy_decision_use (decision);
+                }
 
-        uri = webkit_network_request_get_uri (request);
-        if (strcmp (uri, "about:blank") == 0) {
-                return WEBKIT_NAVIGATION_RESPONSE_ACCEPT;
+                webkit_policy_decision_ignore (decision);
+
+                return TRUE;
         }
-        else if (! priv->snippet_loaded) {
-                priv->snippet_loaded = TRUE;
-                return WEBKIT_NAVIGATION_RESPONSE_ACCEPT;
+
+        request = webkit_navigation_policy_decision_get_request (navigation_decision);
+        uri = webkit_uri_request_get_uri (request);
+        if (strcmp (uri, "about:blank") == 0) {
+                webkit_policy_decision_use (decision);
+
+                return TRUE;
         }
         else if (g_str_has_prefix (uri, "file://")) {
                 GtkWidget *window;
@@ -85,9 +104,10 @@ assistant_navigation_requested (WebKitWebView        *web_view,
                 _dh_window_display_uri (DH_WINDOW (window), uri);
         }
 
-        return WEBKIT_NAVIGATION_RESPONSE_IGNORE;
+        webkit_policy_decision_ignore (decision);
+
+        return TRUE;
 }
-#endif
 
 static gboolean
 assistant_button_press_event (GtkWidget      *widget,
@@ -111,9 +131,7 @@ dh_assistant_view_class_init (DhAssistantViewClass* klass)
         object_class->finalize = view_finalize;
 
         widget_class->button_press_event = assistant_button_press_event;
-#if 0 /* Policy Client */
-        web_view_class->navigation_requested = assistant_navigation_requested;
-#endif
+        web_view_class->decide_policy = assistant_decide_policy;
 
         g_type_class_add_private (klass, sizeof (DhAssistantViewPriv));
 }
