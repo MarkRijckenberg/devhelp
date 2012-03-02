@@ -691,6 +691,7 @@ view_setup_fonts (WebKitWebView *view)
                                    use_system_fonts);
 
         g_object_set (settings,
+                      "zoom-text-only", TRUE,
                       "monospace-font-family", fixed_name,
                       "default-monospace-font-size", (guint) fixed_size,
                       "sans-serif-font-family", variable_name,
