@@ -23,6 +23,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <gtk/gtk.h>
+#include <math.h>
 #ifdef GDK_WINDOWING_QUARTZ
 #include <gtkosxapplication.h>
 #endif
@@ -666,6 +667,36 @@ view_destroy_cb (GtkWidget *view,
         views = g_list_remove (views, view);
 }
 
+static gdouble
+get_screen_dpi (GdkScreen *screen)
+{
+        gdouble dpi;
+        gdouble dp, di;
+
+        dpi = gdk_screen_get_resolution (screen);
+        if (dpi != -1)
+                return dpi;
+
+        dp = hypot (gdk_screen_get_width (screen), gdk_screen_get_height (screen));
+        di = hypot (gdk_screen_get_width_mm (screen), gdk_screen_get_height_mm (screen)) / 25.4;
+
+        return dp / di;
+}
+
+static guint
+dh_util_convert_font_size_to_pixels (GtkWidget *widget,
+                                     gdouble    font_size)
+{
+        GdkScreen *screen;
+        gdouble    dpi;
+
+        screen = gtk_widget_has_screen (widget) ?
+                gtk_widget_get_screen (widget) : gdk_screen_get_default ();
+        dpi = screen ? get_screen_dpi (screen) : 96;
+
+        return font_size / 72.0 * dpi;
+}
+
 static void
 view_setup_fonts (WebKitWebView *view)
 {
@@ -674,8 +705,10 @@ view_setup_fonts (WebKitWebView *view)
         gboolean        use_system_fonts;
 	gchar          *variable_name;
 	gdouble         variable_size;
+        guint           variable_size_px;
 	gchar          *fixed_name;
 	gdouble         fixed_size;
+        guint           fixed_size_px;
 
         conf = ige_conf_get ();
 
@@ -690,13 +723,17 @@ view_setup_fonts (WebKitWebView *view)
         dh_util_font_get_fixed (&fixed_name, &fixed_size,
                                    use_system_fonts);
 
+        /* WebKit2 uses font sizes in pixels */
+        variable_size_px = dh_util_convert_font_size_to_pixels (GTK_WIDGET (view), fixed_size);
+        fixed_size_px = dh_util_convert_font_size_to_pixels (GTK_WIDGET (view), variable_size);
+
         g_object_set (settings,
                       "zoom-text-only", TRUE,
                       "monospace-font-family", fixed_name,
-                      "default-monospace-font-size", (guint) fixed_size,
+                      "default-monospace-font-size", fixed_size_px,
                       "sans-serif-font-family", variable_name,
                       "serif-font-family", variable_name,
-                      "default-font-size", (guint) variable_size,
+                      "default-font-size", variable_size_px,
                       NULL);
 
         g_free (variable_name);
